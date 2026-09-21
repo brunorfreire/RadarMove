@@ -1,0 +1,6 @@
+{
+  "name": "RadarMove - Retenção para Personal Trainers",
+  "description": "Micro SaaS focado em retenção de alunos, bioimpedância, desafios via WhatsApp e funil de conversão de leads para Personal Trainers.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

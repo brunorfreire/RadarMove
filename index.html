@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script>
+      // Safeguard against 'Cannot set property fetch of #<Window> which has only a getter'
+      (function () {
+        try {
+          var currentFetch = window.fetch;
+          var desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (!desc || desc.configurable) {
+            Object.defineProperty(window, 'fetch', {
+              get: function () {
+                return currentFetch;
+              },
+              set: function (fn) {
+                currentFetch = fn;
+              },
+              configurable: true,
+              enumerable: true,
+            });
+          }
+
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            var protoDesc = Object.getOwnPropertyDescriptor(Window.prototype, 'fetch');
+            if (protoDesc && protoDesc.configurable && !protoDesc.set) {
+              Object.defineProperty(Window.prototype, 'fetch', {
+                get: function () {
+                  return currentFetch;
+                },
+                set: function (fn) {
+                  currentFetch = fn;
+                },
+                configurable: true,
+                enumerable: true,
+              });
+            }
+          }
+        } catch (e) {
+          // Silent fail-safe
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RadarMove - Retenção para Personal Trainers</title>
+    <meta name="description" content="Micro SaaS focado em retenção de alunos, bioimpedância, desafios via WhatsApp e funil de conversão de leads para Personal Trainers." />
+    <meta property="og:title" content="RadarMove - Retenção para Personal Trainers" />
+    <meta property="og:description" content="Micro SaaS focado em retenção de alunos, bioimpedância, desafios via WhatsApp e funil de conversão de leads para Personal Trainers." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
