@@ -6,6 +6,7 @@ import { AlunosView } from './components/alunos/AlunosView';
 import { DesafiosView } from './components/desafios/DesafiosView';
 import { LeadsView } from './components/leads/LeadsView';
 import { QuickVoiceModal } from './components/audio/QuickVoiceModal';
+import { SupabaseConnectionView } from './components/supabase/SupabaseConnectionView';
 import { 
   mockProfissional, 
   mockAlunos, 
@@ -407,21 +408,7 @@ export default function App() {
           )}
 
           {activeTab === 'supabase' && (
-            <div className="rounded-2xl border border-emerald-500/20 bg-[#031d17]/90 p-6 backdrop-blur-xl">
-              <div className="flex items-center gap-3 mb-4">
-                <Database className="h-6 w-6 text-cyan-400" />
-                <h3 className="text-lg font-bold text-white">Schema Supabase & Políticas RLS</h3>
-              </div>
-              <p className="text-sm text-slate-300 mb-4">
-                O arquivo <code className="text-cyan-300 bg-[#021813] px-2 py-0.5 rounded font-mono text-xs">/supabase/schema.sql</code> foi gerado no Passo 1 com isolamento multi-tenant por Personal Trainer via <code className="text-cyan-300 bg-[#021813] px-2 py-0.5 rounded font-mono text-xs">auth.uid()</code>.
-              </p>
-              <div className="p-4 rounded-xl bg-[#02140f] border border-emerald-500/15 text-xs font-mono text-slate-300 overflow-x-auto space-y-1">
-                <p className="text-emerald-400">✓ public.profissionais (RLS ativo: auth.uid() = id)</p>
-                <p className="text-emerald-400">✓ public.alunos (RLS ativo: profissional_id = auth.uid())</p>
-                <p className="text-emerald-400">✓ public.avaliacoes_fisicas (RLS ativo via alunos.profissional_id)</p>
-                <p className="text-emerald-400">✓ public.desafios_templates (RLS ativo: templates globais e personalizados)</p>
-              </div>
-            </div>
+            <SupabaseConnectionView />
           )}
         </main>
       </div>
