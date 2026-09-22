@@ -291,8 +291,22 @@ export default function App() {
     setActiveTab('alunos');
   };
 
-  const handleAddAluno = async (novoData: Omit<Aluno, 'id'>) => {
-    const novoId = `aluno-${Date.now()}`;
+  const handleAddAluno = async (novoData: Omit<Aluno, 'id'> | Aluno) => {
+    // Se o objeto já veio com ID persistido pelo Supabase (ex: gerado no AlunoFormModal)
+    if ('id' in novoData && novoData.id && !novoData.id.startsWith('aluno-')) {
+      const alunoCompleto = novoData as Aluno;
+      setAlunos((prev) => {
+        const jaExiste = prev.some((a) => a.id === alunoCompleto.id);
+        if (jaExiste) {
+          return prev.map((a) => (a.id === alunoCompleto.id ? alunoCompleto : a));
+        }
+        return [alunoCompleto, ...prev];
+      });
+      setSelectedAluno(alunoCompleto);
+      return;
+    }
+
+    const novoId = 'id' in novoData && novoData.id ? novoData.id : `aluno-${Date.now()}`;
     const novoAluno: Aluno = {
       ...novoData,
       id: novoId,
@@ -301,26 +315,32 @@ export default function App() {
     setAlunos((prev) => [novoAluno, ...prev]);
     setSelectedAluno(novoAluno);
 
-    if (session?.user?.id) {
-      try {
-        const { data } = await supabase.from('alunos').insert({
-          profissional_id: session.user.id,
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentUserId = user?.id || session?.user?.id;
+
+      if (currentUserId) {
+        const { data, error } = await supabase.from('alunos').insert([{
           nome: novoAluno.nome,
           telefone: novoAluno.telefone,
-          status: novoAluno.status,
-          plano: novoAluno.plano,
+          altura: novoAluno.altura_cm ? Number(novoAluno.altura_cm) : null,
+          altura_cm: novoAluno.altura_cm ? Number(novoAluno.altura_cm) : null,
           objetivo: novoAluno.objetivo,
-          dias_sem_treino: novoAluno.dias_sem_treino || 0,
+          plano: novoAluno.plano,
           frequencia_semanal: novoAluno.frequencia_semanal || 3,
-          altura_cm: novoAluno.altura_cm,
-        }).select().maybeSingle();
+          status: novoAluno.status || 'ativo',
+          dias_sem_treino: novoAluno.dias_sem_treino || 0,
+          profissional_id: currentUserId,
+        }]).select().maybeSingle();
 
-        if (data?.id) {
-          setAlunos((prev) => prev.map((a) => a.id === novoId ? { ...a, id: data.id } : a));
+        if (error) {
+          console.error('Erro ao inserir aluno no Supabase:', error);
+        } else if (data?.id) {
+          setAlunos((prev) => prev.map((a) => (a.id === novoId ? { ...a, id: data.id } : a)));
         }
-      } catch (err) {
-        console.error('Erro ao inserir aluno no Supabase:', err);
       }
+    } catch (err) {
+      console.error('Erro ao persistir novo aluno no Supabase:', err);
     }
   };
 

@@ -24,6 +24,7 @@ import {
 import { Aluno, AlunoStatus } from '../../types';
 import { formatWhatsAppNumber } from '../../lib/whatsappUtils';
 import { isContactPickerSupported, isRunningInIframe, pickContactFromDevice } from '../../lib/contactPickerUtils';
+import { supabase } from '../../lib/supabaseClient';
 
 interface AlunoFormModalProps {
   isOpen: boolean;
@@ -75,6 +76,7 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [successContactMsg, setSuccessContactMsg] = useState<string | null>(null);
   const [isContactSupported, setIsContactSupported] = useState(false);
   const [isImportingContact, setIsImportingContact] = useState(false);
@@ -258,39 +260,113 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
     const alturaNum = parseInt(alturaCm, 10) || 175;
     const phoneFormatted = formatWhatsAppNumber(telefone);
 
-    if (mode === 'edit' && alunoToEdit) {
-      const updated: Aluno = {
-        ...alunoToEdit,
-        nome: nome.trim(),
-        telefone: phoneFormatted,
-        altura_cm: alturaNum,
-        objetivo,
-        plano,
-        frequencia_semanal: frequenciaSemanal,
-        status,
-        data_nascimento: dataNascimento,
-        avatar_url: avatarUrl.trim() || undefined,
-      };
-      onSave(updated);
-    } else {
-      const novoAlunoData: Omit<Aluno, 'id'> = {
-        profissional_id: 'prof-01',
-        nome: nome.trim(),
-        telefone: phoneFormatted,
-        altura_cm: alturaNum,
-        objetivo,
-        plano,
-        frequencia_semanal: frequenciaSemanal,
-        status: 'ativo',
-        dias_sem_treino: 0,
-        ultimo_checkin: new Date().toISOString().split('T')[0],
-        data_nascimento: dataNascimento,
-        avatar_url: avatarUrl.trim() || undefined,
-      };
-      onSave(novoAlunoData);
-    }
+    setIsSubmitting(true);
+    setErrorMsg(null);
 
-    onClose();
+    (async () => {
+      try {
+        // Obter usuário autenticado da sessão atual no Supabase
+        const { data: { user } } = await supabase.auth.getUser();
+        const currentUserId = user?.id || (supabase.auth as any).session?.()?.user?.id;
+
+        if (mode === 'create') {
+          if (!user && !currentUserId) {
+            throw new Error('Usuário não autenticado. Faça login para cadastrar novos alunos.');
+          }
+
+          const profissionalId = user?.id || currentUserId;
+
+          // Inserção no Supabase com profissional_id explícito
+          const { data: insertedData, error: insertError } = await supabase
+            .from('alunos')
+            .insert([{
+              nome: nome.trim(),
+              telefone: phoneFormatted,
+              altura: alturaNum,
+              altura_cm: alturaNum,
+              objetivo,
+              plano,
+              frequencia_semanal: frequenciaSemanal,
+              status: 'ativo',
+              dias_sem_treino: 0,
+              data_nascimento: dataNascimento,
+              avatar_url: avatarUrl.trim() || null,
+              profissional_id: profissionalId,
+            }])
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Erro ao inserir aluno no Supabase:', insertError);
+            throw new Error(insertError.message || 'Falha ao salvar aluno no banco de dados');
+          }
+
+          const alunoCriado: Aluno = {
+            id: insertedData?.id || `aluno-${Date.now()}`,
+            profissional_id: profissionalId,
+            nome: insertedData?.nome || nome.trim(),
+            telefone: insertedData?.telefone || phoneFormatted,
+            altura_cm: alturaNum,
+            objetivo: insertedData?.objetivo || objetivo,
+            plano: insertedData?.plano || plano,
+            frequencia_semanal: insertedData?.frequencia_semanal || frequenciaSemanal,
+            status: (insertedData?.status as AlunoStatus) || 'ativo',
+            dias_sem_treino: 0,
+            ultimo_checkin: new Date().toISOString().split('T')[0],
+            data_nascimento: insertedData?.data_nascimento || dataNascimento,
+            avatar_url: insertedData?.avatar_url || avatarUrl.trim() || undefined,
+          };
+
+          onSave(alunoCriado);
+          onClose();
+        } else if (mode === 'edit' && alunoToEdit) {
+          const updated: Aluno = {
+            ...alunoToEdit,
+            nome: nome.trim(),
+            telefone: phoneFormatted,
+            altura_cm: alturaNum,
+            objetivo,
+            plano,
+            frequencia_semanal: frequenciaSemanal,
+            status,
+            data_nascimento: dataNascimento,
+            avatar_url: avatarUrl.trim() || undefined,
+          };
+
+          if (currentUserId) {
+            const { error: updateError } = await supabase
+              .from('alunos')
+              .update({
+                nome: nome.trim(),
+                telefone: phoneFormatted,
+                altura_cm: alturaNum,
+                altura: alturaNum,
+                objetivo,
+                plano,
+                frequencia_semanal: frequenciaSemanal,
+                status,
+                data_nascimento: dataNascimento,
+                avatar_url: avatarUrl.trim() || null,
+              })
+              .eq('id', alunoToEdit.id)
+              .eq('profissional_id', currentUserId);
+
+            if (updateError) {
+              console.error('Erro ao atualizar aluno no Supabase:', updateError);
+              throw new Error(updateError.message || 'Falha ao atualizar dados do aluno');
+            }
+          }
+
+          onSave(updated);
+          onClose();
+        }
+      } catch (err: any) {
+        console.error('Erro na operação com Supabase:', err);
+        setErrorMsg(err.message || 'Erro inesperado ao salvar no Supabase.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
   };
 
   return (
@@ -780,10 +856,20 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             <button
               type="submit"
               id="btn-submit-aluno-form"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 text-xs font-extrabold text-slate-950 shadow-lg shadow-emerald-500/25 hover:brightness-110 active:scale-95 transition-all"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 text-xs font-extrabold text-slate-950 shadow-lg shadow-emerald-500/25 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Check className="h-4 w-4" />
-              <span>{mode === 'create' ? 'Cadastrar Aluno' : 'Salvar Alterações'}</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Salvando no banco...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  <span>{mode === 'create' ? 'Cadastrar Aluno' : 'Salvar Alterações'}</span>
+                </>
+              )}
             </button>
           </div>
         </form>

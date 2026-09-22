@@ -36,7 +36,7 @@ interface AlunosViewProps {
   alunos: Aluno[];
   selectedAluno: Aluno | null;
   onSelectAluno: (aluno: Aluno) => void;
-  onAddAluno?: (aluno: Omit<Aluno, 'id'>) => void;
+  onAddAluno?: (aluno: Omit<Aluno, 'id'> | Aluno) => void;
   onUpdateAluno?: (aluno: Aluno) => void;
   onUpdateAvatar?: (alunoId: string, newAvatarUrl: string) => void;
   fotos: FotoEvolucao[];
@@ -88,7 +88,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
 
   const handleSaveCreate = (novoData: Omit<Aluno, 'id'> | Aluno) => {
     if (onAddAluno) {
-      onAddAluno(novoData as Omit<Aluno, 'id'>);
+      onAddAluno(novoData);
     }
     showToast(`Cliente "${novoData.nome}" cadastrado com sucesso!`);
   };
