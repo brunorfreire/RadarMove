@@ -35,10 +35,13 @@ CREATE TABLE IF NOT EXISTS public.alunos (
     genero TEXT,    -- Gênero (masculino, feminino, outro)
     data_nascimento DATE,
     observacoes TEXT, -- Observações clínicas e metas adicionais
-    status VARCHAR(20) DEFAULT 'ativo' CHECK (status IN ('ativo', 'inativo', 'em_risco')),
+    status VARCHAR(20) DEFAULT 'ativo',
+    plano TEXT,
     ultimo_checkin TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()),
     avatar_url TEXT,
+    foto_url TEXT,
     objetivo TEXT,
+    objetivos TEXT[] DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -53,6 +56,17 @@ ADD COLUMN IF NOT EXISTS data_nascimento DATE,
 ADD COLUMN IF NOT EXISTS peso NUMERIC,
 ADD COLUMN IF NOT EXISTS genero TEXT,
 ADD COLUMN IF NOT EXISTS observacoes TEXT;
+
+-- Adiciona a coluna 'objetivo' e os restantes campos essenciais da ficha do aluno
+ALTER TABLE public.alunos 
+ADD COLUMN IF NOT EXISTS objetivo TEXT,
+ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ativo',
+ADD COLUMN IF NOT EXISTS foto_url TEXT,
+ADD COLUMN IF NOT EXISTS plano TEXT;
+
+-- Atualiza a coluna objetivo para suportar múltiplos valores (array de texto)
+ALTER TABLE public.alunos 
+ADD COLUMN IF NOT EXISTS objetivos TEXT[] DEFAULT '{}';
 
 -- Atualiza a cache do esquema da API do Supabase imediatamente
 NOTIFY pgrst, 'reload config';

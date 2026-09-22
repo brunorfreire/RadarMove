@@ -21,7 +21,10 @@ import {
   Loader2,
   ExternalLink,
   Weight,
-  FileText
+  FileText,
+  Plus,
+  Pencil,
+  Tag
 } from 'lucide-react';
 import { Aluno, AlunoStatus } from '../../types';
 import { formatWhatsAppNumber } from '../../lib/whatsappUtils';
@@ -45,12 +48,14 @@ const AVATAR_PRESETS = [
   'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
 ];
 
-const OBJETIVOS_PRESETS = [
-  'Hipertrofia & Força',
+const DEFAULT_OBJETIVOS_PRESETS = [
+  'Hipertrofia & Ganho de Força',
   'Emagrecimento & Definição',
   'Condicionamento Geral',
   'Saúde & Longevidade',
-  'Reabilitação Lombar / Postura'
+  'Reabilitação Lombar / Postura',
+  'Mobilidade & Flexibilidade',
+  'Performance Esportiva',
 ];
 
 const PLANOS_PRESETS = [
@@ -73,7 +78,25 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
   const [peso, setPeso] = useState<string>('');
   const [genero, setGenero] = useState<string>('Masculino');
   const [observacoes, setObservacoes] = useState<string>('');
-  const [objetivo, setObjetivo] = useState('Hipertrofia & Força');
+  
+  // Multi-select & Custom Tags para Objetivos
+  const [availableObjetivos, setAvailableObjetivos] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('radarmove_objetivos_tags');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return DEFAULT_OBJETIVOS_PRESETS;
+  });
+  const [selectedObjetivos, setSelectedObjetivos] = useState<string[]>(['Hipertrofia & Ganho de Força']);
+  const [newObjetivoInput, setNewObjetivoInput] = useState('');
+  const [editingObjetivoIndex, setEditingObjetivoIndex] = useState<number | null>(null);
+  const [editingObjetivoText, setEditingObjetivoText] = useState('');
+
   const [plano, setPlano] = useState('Presencial VIP 3x/semana');
   const [frequenciaSemanal, setFrequenciaSemanal] = useState(3);
   const [status, setStatus] = useState<AlunoStatus>('ativo');
@@ -182,6 +205,58 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
     reader.readAsDataURL(file);
   };
 
+  // Persistir tags de objetivos customizadas no localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('radarmove_objetivos_tags', JSON.stringify(availableObjetivos));
+    } catch (e) {
+      // ignore
+    }
+  }, [availableObjetivos]);
+
+  const handleToggleObjetivo = (item: string) => {
+    setSelectedObjetivos((prev) =>
+      prev.includes(item)
+        ? prev.filter((o) => o !== item)
+        : [...prev, item]
+    );
+  };
+
+  const handleAddNewObjetivo = () => {
+    const trimmed = newObjetivoInput.trim();
+    if (!trimmed) return;
+    if (!availableObjetivos.includes(trimmed)) {
+      setAvailableObjetivos((prev) => [...prev, trimmed]);
+    }
+    if (!selectedObjetivos.includes(trimmed)) {
+      setSelectedObjetivos((prev) => [...prev, trimmed]);
+    }
+    setNewObjetivoInput('');
+  };
+
+  const handleStartEditObjetivo = (index: number, val: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingObjetivoIndex(index);
+    setEditingObjetivoText(val);
+  };
+
+  const handleSaveEditObjetivo = (oldVal: string) => {
+    const trimmed = editingObjetivoText.trim();
+    if (!trimmed) {
+      setEditingObjetivoIndex(null);
+      return;
+    }
+    setAvailableObjetivos((prev) => prev.map((o) => (o === oldVal ? trimmed : o)));
+    setSelectedObjetivos((prev) => prev.map((o) => (o === oldVal ? trimmed : o)));
+    setEditingObjetivoIndex(null);
+  };
+
+  const handleDeleteObjetivo = (item: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAvailableObjetivos((prev) => prev.filter((o) => o !== item));
+    setSelectedObjetivos((prev) => prev.filter((o) => o !== item));
+  };
+
   // Sync state when opening in edit mode or create mode
   useEffect(() => {
     if (isOpen) {
@@ -203,12 +278,30 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
         setPeso(alunoToEdit.peso !== undefined && alunoToEdit.peso !== null ? String(alunoToEdit.peso) : '');
         setGenero(alunoToEdit.genero || 'Masculino');
         setObservacoes(alunoToEdit.observacoes || '');
-        setObjetivo(alunoToEdit.objetivo || 'Hipertrofia & Força');
+
+        // Carrega objetivos múltiplos
+        let initialObjs: string[] = [];
+        if (alunoToEdit.objetivos && Array.isArray(alunoToEdit.objetivos) && alunoToEdit.objetivos.length > 0) {
+          initialObjs = alunoToEdit.objetivos;
+        } else if (alunoToEdit.objetivo) {
+          initialObjs = alunoToEdit.objetivo.split(',').map((s) => s.trim()).filter(Boolean);
+        } else {
+          initialObjs = ['Hipertrofia & Ganho de Força'];
+        }
+        setSelectedObjetivos(initialObjs);
+        setAvailableObjetivos((prev) => {
+          const combined = [...prev];
+          initialObjs.forEach((o) => {
+            if (!combined.includes(o)) combined.push(o);
+          });
+          return combined;
+        });
+
         setPlano(alunoToEdit.plano || 'Presencial VIP 3x/semana');
         setFrequenciaSemanal(alunoToEdit.frequencia_semanal || 3);
         setStatus(alunoToEdit.status || 'ativo');
         setDataNascimento(alunoToEdit.data_nascimento || '1995-05-15');
-        setAvatarUrl(alunoToEdit.avatar_url || '');
+        setAvatarUrl(alunoToEdit.avatar_url || (alunoToEdit as any).foto_url || '');
       } else {
         // Reset for new creation
         setNome('');
@@ -217,7 +310,9 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
         setPeso('');
         setGenero('Masculino');
         setObservacoes('');
-        setObjetivo('Hipertrofia & Força');
+        setSelectedObjetivos(['Hipertrofia & Ganho de Força']);
+        setNewObjetivoInput('');
+        setEditingObjetivoIndex(null);
         setPlano('Presencial VIP 3x/semana');
         setFrequenciaSemanal(3);
         setStatus('ativo');
@@ -270,6 +365,8 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
 
     const alturaNum = parseInt(alturaCm, 10) || 175;
     const phoneFormatted = formatWhatsAppNumber(telefone);
+    const finalObjetivos = selectedObjetivos.length > 0 ? selectedObjetivos : ['Hipertrofia & Ganho de Força'];
+    const finalObjetivoStr = finalObjetivos.join(', ');
 
     setIsSubmitting(true);
     setErrorMsg(null);
@@ -292,15 +389,20 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             nome: nome.trim(),
             telefone: phoneFormatted,
             altura: alturaNum ? Number(alturaNum) : null,
-            objetivo,
-            status: 'ativo',
+            objetivo: finalObjetivoStr,
+            objetivos: finalObjetivos,
+            status,
+            plano,
             profissional_id: profissionalId,
           };
           if (dataNascimento) insertPayload.data_nascimento = dataNascimento;
           if (peso && !isNaN(Number(peso))) insertPayload.peso = Number(peso);
           if (genero) insertPayload.genero = genero;
           if (observacoes.trim()) insertPayload.observacoes = observacoes.trim();
-          if (avatarUrl.trim()) insertPayload.avatar_url = avatarUrl.trim();
+          if (avatarUrl.trim()) {
+            insertPayload.avatar_url = avatarUrl.trim();
+            insertPayload.foto_url = avatarUrl.trim();
+          }
 
           let { data: insertedData, error: insertError } = await supabase
             .from('alunos')
@@ -314,10 +416,14 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             const safePayload: Record<string, any> = {
               nome: nome.trim(),
               telefone: phoneFormatted,
-              objetivo,
+              altura: alturaNum ? Number(alturaNum) : null,
+              objetivo: finalObjetivoStr,
               status: 'ativo',
               profissional_id: profissionalId,
             };
+            if (!insertError.message?.includes('objetivos')) {
+              safePayload.objetivos = finalObjetivos;
+            }
             const retryResult = await supabase
               .from('alunos')
               .insert([safePayload])
@@ -346,14 +452,15 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             peso: peso && !isNaN(Number(peso)) ? Number(peso) : (insertedData?.peso ? Number(insertedData.peso) : undefined),
             genero: genero || insertedData?.genero || undefined,
             observacoes: observacoes.trim() || insertedData?.observacoes || undefined,
-            objetivo: insertedData?.objetivo || objetivo,
+            objetivo: insertedData?.objetivo || finalObjetivoStr,
+            objetivos: Array.isArray(insertedData?.objetivos) && insertedData.objetivos.length > 0 ? insertedData.objetivos : finalObjetivos,
             plano,
             frequencia_semanal: frequenciaSemanal,
             status: (insertedData?.status as AlunoStatus) || 'ativo',
             dias_sem_treino: 0,
             ultimo_checkin: new Date().toISOString().split('T')[0],
             data_nascimento: insertedData?.data_nascimento || dataNascimento,
-            avatar_url: insertedData?.avatar_url || avatarUrl.trim() || undefined,
+            avatar_url: insertedData?.foto_url || insertedData?.avatar_url || avatarUrl.trim() || undefined,
           };
 
           onSave(alunoCriado);
@@ -367,7 +474,8 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             peso: peso && !isNaN(Number(peso)) ? Number(peso) : undefined,
             genero: genero || undefined,
             observacoes: observacoes.trim() || undefined,
-            objetivo,
+            objetivo: finalObjetivoStr,
+            objetivos: finalObjetivos,
             plano,
             frequencia_semanal: frequenciaSemanal,
             status,
@@ -380,11 +488,19 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
               nome: nome.trim(),
               telefone: phoneFormatted,
               altura: alturaNum ? Number(alturaNum) : null,
-              objetivo,
+              objetivo: finalObjetivoStr,
+              objetivos: finalObjetivos,
               status,
+              plano,
               data_nascimento: dataNascimento,
-              avatar_url: avatarUrl.trim() || null,
             };
+            if (avatarUrl.trim()) {
+              updatePayload.avatar_url = avatarUrl.trim();
+              updatePayload.foto_url = avatarUrl.trim();
+            } else {
+              updatePayload.avatar_url = null;
+              updatePayload.foto_url = null;
+            }
             if (peso && !isNaN(Number(peso))) updatePayload.peso = Number(peso);
             if (genero) updatePayload.genero = genero;
             if (observacoes.trim()) updatePayload.observacoes = observacoes.trim();
@@ -396,13 +512,17 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
               .eq('profissional_id', currentUserId);
 
             if (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache'))) {
-              const safeUpdate = {
+              const safeUpdate: Record<string, any> = {
                 nome: nome.trim(),
                 telefone: phoneFormatted,
-                objetivo,
+                altura: alturaNum ? Number(alturaNum) : null,
+                objetivo: finalObjetivoStr,
                 status,
                 avatar_url: avatarUrl.trim() || null,
               };
+              if (!updateError.message?.includes('objetivos')) {
+                safeUpdate.objetivos = finalObjetivos;
+              }
               const retryUpdate = await supabase
                 .from('alunos')
                 .update(safeUpdate)
@@ -628,38 +748,148 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             </div>
           </div>
 
-          {/* Objetivo Principal */}
-          <div>
-            <label className="block text-xs font-bold text-slate-200 mb-1">
-              Objetivo Principal
-            </label>
-            <div className="relative mb-2">
-              <Target className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-400" />
-              <input
-                type="text"
-                value={objetivo}
-                onChange={(e) => setObjetivo(e.target.value)}
-                placeholder="Ex: Hipertrofia & Ganho de Força"
-                className="w-full rounded-xl border border-emerald-500/30 bg-[#02130e] pl-9 pr-4 py-2.5 text-sm text-white focus:border-cyan-400 focus:outline-none"
-              />
+          {/* Objetivos do Aluno (Multi-Select & Custom Tags) */}
+          <div className="rounded-2xl border border-emerald-500/25 bg-[#02140f] p-4">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-cyan-400" />
+                <label className="text-xs font-bold text-slate-200">
+                  Objetivos do Aluno
+                </label>
+                <span className="text-[10px] font-semibold text-cyan-300 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20">
+                  {selectedObjetivos.length} {selectedObjetivos.length === 1 ? 'selecionado' : 'selecionados'}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400">
+                Selecione múltiplos objetivos
+              </span>
             </div>
-            {/* Quick Chips */}
-            <div className="flex flex-wrap gap-1.5">
-              {OBJETIVOS_PRESETS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setObjetivo(item)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                    objetivo === item
-                      ? 'bg-cyan-400/20 text-cyan-300 border border-cyan-400/40'
-                      : 'bg-[#021813] text-slate-400 hover:text-slate-200 border border-emerald-500/20'
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
+
+            {/* Input para criar novo objetivo personalizado */}
+            <div className="flex gap-2 mb-3">
+              <div className="relative flex-1">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={newObjetivoInput}
+                  onChange={(e) => setNewObjetivoInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddNewObjetivo();
+                    }
+                  }}
+                  placeholder="Criar novo objetivo personalizado..."
+                  className="w-full rounded-xl border border-emerald-500/20 bg-[#010e0a] pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAddNewObjetivo}
+                disabled={!newObjetivoInput.trim()}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all shrink-0 shadow-sm cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Adicionar
+              </button>
             </div>
+
+            {/* Lista de tags interativas */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {availableObjetivos.map((item, idx) => {
+                const isSelected = selectedObjetivos.includes(item);
+                const isEditing = editingObjetivoIndex === idx;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#022419] border border-cyan-400 shadow-sm"
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingObjetivoText}
+                        onChange={(e) => setEditingObjetivoText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSaveEditObjetivo(item);
+                          } else if (e.key === 'Escape') {
+                            setEditingObjetivoIndex(null);
+                          }
+                        }}
+                        className="bg-transparent text-xs font-semibold text-white outline-none w-36"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEditObjetivo(item)}
+                        className="p-1 text-emerald-400 hover:text-emerald-300"
+                        title="Salvar alteração"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingObjetivoIndex(null)}
+                        className="p-1 text-slate-400 hover:text-slate-200"
+                        title="Cancelar"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => handleToggleObjetivo(item)}
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer select-none transition-all ${
+                      isSelected
+                        ? 'bg-cyan-500/20 text-cyan-200 border-2 border-cyan-400 shadow-sm shadow-cyan-500/10'
+                        : 'bg-[#021813] text-slate-400 hover:text-slate-200 border border-emerald-500/20 hover:border-emerald-500/40'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {isSelected ? (
+                        <Check className="h-3.5 w-3.5 text-cyan-300 stroke-[3]" />
+                      ) : (
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-600 group-hover:bg-emerald-400 transition-colors" />
+                      )}
+                      {item}
+                    </span>
+
+                    {/* Botões de Ação (Editar e Excluir Tag) */}
+                    <div className="flex items-center gap-0.5 ml-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={(e) => handleStartEditObjetivo(idx, item, e)}
+                        className="p-0.5 text-slate-400 hover:text-cyan-300 rounded"
+                        title="Editar nome desta tag"
+                      >
+                        <Pencil className="h-2.5 w-2.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteObjetivo(item, e)}
+                        className="p-0.5 text-slate-400 hover:text-rose-400 rounded"
+                        title="Excluir tag"
+                      >
+                        <Trash2 className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {selectedObjetivos.length === 0 && (
+              <p className="text-[11px] text-amber-300/90 mt-2.5 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
+                Selecione pelo menos um objetivo para orientar o plano de treino.
+              </p>
+            )}
           </div>
 
           {/* Plano e Frequência Semanal */}

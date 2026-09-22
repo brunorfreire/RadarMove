@@ -160,10 +160,23 @@ export const AlunoProfileHeader: React.FC<AlunoProfileHeaderProps> = ({
               {getStatusBadge()}
             </div>
 
-            <p className="text-xs md:text-sm text-cyan-300/90 flex items-center gap-1.5 font-medium">
-              <Target className="h-3.5 w-3.5 text-cyan-400" />
-              Objetivo: {aluno.objetivo}
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="text-xs text-cyan-300/90 flex items-center gap-1 font-medium mr-1">
+                <Target className="h-3.5 w-3.5 text-cyan-400" />
+                {aluno.objetivos && aluno.objetivos.length > 1 ? 'Objetivos:' : 'Objetivo:'}
+              </span>
+              {aluno.objetivos && aluno.objetivos.length > 0 ? (
+                aluno.objetivos.map((obj, i) => (
+                  <span key={i} className="text-[11px] font-semibold text-cyan-200 bg-cyan-500/15 border border-cyan-400/30 px-2 py-0.5 rounded-md">
+                    {obj}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-cyan-200 font-medium">
+                  {aluno.objetivo}
+                </span>
+              )}
+            </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 pt-1">
               {alturaDisplay && (

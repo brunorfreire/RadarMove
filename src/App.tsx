@@ -144,24 +144,36 @@ export default function App() {
           .eq('profissional_id', userId)
           .order('nome', { ascending: true });
 
-        const alunosList: Aluno[] = (alunosData || []).map((a: any) => ({
-          id: a.id,
-          profissional_id: a.profissional_id,
-          nome: a.nome,
-          telefone: a.telefone || '',
-          data_nascimento: a.data_nascimento || '',
-          status: a.status || 'ativo',
-          ultimo_checkin: a.ultimo_checkin || new Date().toISOString(),
-          avatar_url: a.avatar_url,
-          objetivo: a.objetivo || 'Saúde e Performance',
-          dias_sem_treino: typeof a.dias_sem_treino === 'number' ? a.dias_sem_treino : 0,
-          plano: a.plano || 'Presencial',
-          frequencia_semanal: a.frequencia_semanal || 3,
-          altura_cm: a.altura !== undefined && a.altura !== null ? Number(a.altura) : (a.altura_cm ? Number(a.altura_cm) : 175),
-          peso: a.peso !== undefined && a.peso !== null ? Number(a.peso) : undefined,
-          genero: a.genero || undefined,
-          observacoes: a.observacoes || undefined,
-        }));
+        const alunosList: Aluno[] = (alunosData || []).map((a: any) => {
+          let objetivosArr: string[] = [];
+          if (Array.isArray(a.objetivos) && a.objetivos.length > 0) {
+            objetivosArr = a.objetivos;
+          } else if (a.objetivo) {
+            objetivosArr = a.objetivo.split(',').map((s: string) => s.trim()).filter(Boolean);
+          } else {
+            objetivosArr = ['Hipertrofia & Ganho de Força'];
+          }
+
+          return {
+            id: a.id,
+            profissional_id: a.profissional_id,
+            nome: a.nome,
+            telefone: a.telefone || '',
+            data_nascimento: a.data_nascimento || '',
+            status: a.status || 'ativo',
+            ultimo_checkin: a.ultimo_checkin || new Date().toISOString(),
+            avatar_url: a.foto_url || a.avatar_url || '',
+            objetivo: a.objetivo || objetivosArr.join(', ') || 'Saúde e Performance',
+            objetivos: objetivosArr,
+            dias_sem_treino: typeof a.dias_sem_treino === 'number' ? a.dias_sem_treino : 0,
+            plano: a.plano || 'Presencial',
+            frequencia_semanal: a.frequencia_semanal || 3,
+            altura_cm: a.altura !== undefined && a.altura !== null ? Number(a.altura) : (a.altura_cm ? Number(a.altura_cm) : 175),
+            peso: a.peso !== undefined && a.peso !== null ? Number(a.peso) : undefined,
+            genero: a.genero || undefined,
+            observacoes: a.observacoes || undefined,
+          };
+        });
 
         setAlunos(alunosList);
         setSelectedAluno(alunosList.length > 0 ? alunosList[0] : null);
@@ -328,15 +340,21 @@ export default function App() {
       const currentUserId = user?.id || session?.user?.id;
 
       if (currentUserId) {
+        const objArray = novoAluno.objetivos && novoAluno.objetivos.length > 0 ? novoAluno.objetivos : (novoAluno.objetivo ? [novoAluno.objetivo] : ['Hipertrofia & Ganho de Força']);
         const payload: Record<string, any> = {
           nome: novoAluno.nome,
           telefone: novoAluno.telefone,
           altura: novoAluno.altura_cm ? Number(novoAluno.altura_cm) : null,
-          objetivo: novoAluno.objetivo,
+          objetivo: novoAluno.objetivo || objArray.join(', '),
+          objetivos: objArray,
           status: novoAluno.status || 'ativo',
+          plano: novoAluno.plano || 'Presencial VIP 3x/semana',
           profissional_id: currentUserId,
         };
-        if (novoAluno.avatar_url) payload.avatar_url = novoAluno.avatar_url;
+        if (novoAluno.avatar_url) {
+          payload.avatar_url = novoAluno.avatar_url;
+          payload.foto_url = novoAluno.avatar_url;
+        }
         if (novoAluno.data_nascimento) payload.data_nascimento = novoAluno.data_nascimento;
         if (novoAluno.peso !== undefined && novoAluno.peso !== null) payload.peso = Number(novoAluno.peso);
         if (novoAluno.genero) payload.genero = novoAluno.genero;
@@ -345,13 +363,17 @@ export default function App() {
         let { data, error } = await supabase.from('alunos').insert([payload]).select().maybeSingle();
 
         if (error && (error.message?.includes('column') || error.message?.includes('schema cache'))) {
-          const safePayload = {
+          const safePayload: Record<string, any> = {
             nome: novoAluno.nome,
             telefone: novoAluno.telefone,
-            objetivo: novoAluno.objetivo,
+            altura: novoAluno.altura_cm ? Number(novoAluno.altura_cm) : null,
+            objetivo: novoAluno.objetivo || objArray.join(', '),
             status: novoAluno.status || 'ativo',
             profissional_id: currentUserId,
           };
+          if (!error.message?.includes('objetivos')) {
+            safePayload.objetivos = objArray;
+          }
           const retry = await supabase.from('alunos').insert([safePayload]).select().maybeSingle();
           data = retry.data;
           error = retry.error;
@@ -374,14 +396,20 @@ export default function App() {
 
     if (session?.user?.id) {
       try {
+        const objArray = alunoAtualizado.objetivos && alunoAtualizado.objetivos.length > 0 ? alunoAtualizado.objetivos : (alunoAtualizado.objetivo ? [alunoAtualizado.objetivo] : ['Hipertrofia & Ganho de Força']);
         const updatePayload: Record<string, any> = {
           nome: alunoAtualizado.nome,
           telefone: alunoAtualizado.telefone,
           status: alunoAtualizado.status,
-          objetivo: alunoAtualizado.objetivo,
+          objetivo: alunoAtualizado.objetivo || objArray.join(', '),
+          objetivos: objArray,
+          plano: alunoAtualizado.plano,
           altura: alunoAtualizado.altura_cm ? Number(alunoAtualizado.altura_cm) : null,
         };
-        if (alunoAtualizado.avatar_url) updatePayload.avatar_url = alunoAtualizado.avatar_url;
+        if (alunoAtualizado.avatar_url) {
+          updatePayload.avatar_url = alunoAtualizado.avatar_url;
+          updatePayload.foto_url = alunoAtualizado.avatar_url;
+        }
         if (alunoAtualizado.data_nascimento) updatePayload.data_nascimento = alunoAtualizado.data_nascimento;
         if (alunoAtualizado.peso !== undefined && alunoAtualizado.peso !== null) updatePayload.peso = Number(alunoAtualizado.peso);
         if (alunoAtualizado.genero) updatePayload.genero = alunoAtualizado.genero;
@@ -398,7 +426,7 @@ export default function App() {
             nome: alunoAtualizado.nome,
             telefone: alunoAtualizado.telefone,
             status: alunoAtualizado.status,
-            objetivo: alunoAtualizado.objetivo,
+            objetivo: alunoAtualizado.objetivo || objArray.join(', '),
           };
           await supabase
             .from('alunos')

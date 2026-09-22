@@ -30,6 +30,7 @@ export interface Aluno {
   ultimo_checkin: string;
   avatar_url?: string;
   objetivo: string;
+  objetivos?: string[];
   dias_sem_treino: number;
   plano: string;
   frequencia_semanal: number;
