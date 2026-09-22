@@ -9,10 +9,14 @@ import {
   FileText, 
   Compass, 
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  Contact,
+  Smartphone,
+  Info
 } from 'lucide-react';
 import { Lead, LeadOrigem, LeadTemperatura } from '../../types';
 import { formatWhatsAppNumber } from '../../lib/whatsappUtils';
+import { isContactPickerSupported, isRunningInIframe, pickContactFromDevice } from '../../lib/contactPickerUtils';
 
 interface NovoLeadModalProps {
   isOpen: boolean;
@@ -38,6 +42,52 @@ export const NovoLeadModal: React.FC<NovoLeadModalProps> = ({
   const [valorEstimado, setValorEstimado] = useState('380');
   const [notas, setNotas] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [isContactSupported, setIsContactSupported] = useState(false);
+  const [isImportingContact, setIsImportingContact] = useState(false);
+  const [inIframe, setInIframe] = useState(false);
+  const [contactFeedback, setContactFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsContactSupported(isContactPickerSupported());
+    setInIframe(isRunningInIframe());
+  }, []);
+
+  const handleImportContact = async () => {
+    setContactFeedback(null);
+
+    if (isRunningInIframe()) {
+      setContactFeedback('A API de contatos é restrita no preview. Abra o app em uma aba separada no celular.');
+      return;
+    }
+
+    if (!isContactPickerSupported()) {
+      setContactFeedback('Acesso aos contatos disponível no Chrome em smartphones.');
+      return;
+    }
+
+    setIsImportingContact(true);
+    try {
+      const contact = await pickContactFromDevice();
+      if (contact) {
+        if (contact.name) setNome(contact.name);
+        if (contact.formattedTelefone) {
+          setTelefone(contact.formattedTelefone);
+        } else if (contact.telefone) {
+          setTelefone(contact.telefone);
+        }
+        setContactFeedback(`Contato "${contact.name || 'selecionado'}" importado com sucesso!`);
+        setTimeout(() => setContactFeedback(null), 4000);
+      }
+    } catch (err: any) {
+      console.log('Seleção cancelada pelo usuário ou não suportada:', err);
+      const msg = err?.message || '';
+      if (msg.includes('top frame')) {
+        setContactFeedback('A agenda só pode ser acessada na janela principal fora do preview.');
+      }
+    } finally {
+      setIsImportingContact(false);
+    }
+  };
 
   useEffect(() => {
     if (leadToEdit) {
@@ -115,6 +165,32 @@ export const NovoLeadModal: React.FC<NovoLeadModalProps> = ({
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        {/* Botão de Importação dos Contatos */}
+        <div className="mb-4 p-2.5 rounded-xl border border-cyan-500/20 bg-cyan-950/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Smartphone className="h-4 w-4 text-cyan-400" />
+              <span className="text-xs text-slate-300">
+                Preencher dados direto da agenda
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleImportContact}
+              disabled={isImportingContact}
+              className="px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Contact className="h-3.5 w-3.5" />
+              <span>{isImportingContact ? 'Lendo...' : 'Importar dos Contatos 📱'}</span>
+            </button>
+          </div>
+          {contactFeedback && (
+            <p className="mt-2 text-[11px] text-cyan-300 bg-cyan-950/60 p-2 rounded-lg border border-cyan-500/25 animate-in fade-in">
+              {contactFeedback}
+            </p>
+          )}
         </div>
 
         {/* Form */}

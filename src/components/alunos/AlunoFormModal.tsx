@@ -14,10 +14,16 @@ import {
   Upload,
   Camera,
   Trash2,
-  CheckCircle2
+  CheckCircle2,
+  Contact,
+  Smartphone,
+  Info,
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 import { Aluno, AlunoStatus } from '../../types';
 import { formatWhatsAppNumber } from '../../lib/whatsappUtils';
+import { isContactPickerSupported, isRunningInIframe, pickContactFromDevice } from '../../lib/contactPickerUtils';
 
 interface AlunoFormModalProps {
   isOpen: boolean;
@@ -69,7 +75,84 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successContactMsg, setSuccessContactMsg] = useState<string | null>(null);
+  const [isContactSupported, setIsContactSupported] = useState(false);
+  const [isImportingContact, setIsImportingContact] = useState(false);
+  const [inIframe, setInIframe] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Detecta se a Contact Picker API nativa é suportada pelo navegador e se está em iframe
+  useEffect(() => {
+    setIsContactSupported(isContactPickerSupported());
+    setInIframe(isRunningInIframe());
+  }, []);
+
+  const handleImportContact = async () => {
+    setErrorMsg(null);
+    setSuccessContactMsg(null);
+
+    // 1. Checagem de Iframe (A W3C Contacts API exige execução estrita no top frame)
+    if (isRunningInIframe()) {
+      setErrorMsg('A API de Contatos só funciona na janela principal (fora do preview). Abra o aplicativo em uma nova aba do navegador no celular para selecionar contatos da sua agenda.');
+      return;
+    }
+
+    // 2. Checagem de suporte nativo
+    if (!('contacts' in navigator && 'ContactsManager' in window)) {
+      setErrorMsg('O seu navegador atual não suporta importação direta de contatos. Por favor, acesse pelo Chrome no smartphone ou digite os dados manualmente.');
+      return;
+    }
+
+    setIsImportingContact(true);
+
+    try {
+      // 3. Consulta dinâmica das propriedades suportadas pela API
+      let props: string[] = ['name', 'tel'];
+      if (typeof (navigator as any).contacts.getProperties === 'function') {
+        try {
+          const supportedProperties: string[] = await (navigator as any).contacts.getProperties();
+          const filtered: string[] = [];
+          if (supportedProperties.includes('name')) filtered.push('name');
+          if (supportedProperties.includes('tel')) filtered.push('tel');
+          if (filtered.length > 0) {
+            props = filtered;
+          }
+        } catch (propErr) {
+          console.warn('Erro ao consultar supportedProperties:', propErr);
+        }
+      }
+
+      // 4. Disparo do seletor nativo
+      const contacts = await (navigator as any).contacts.select(props, { multiple: false });
+      
+      if (contacts && contacts.length > 0) {
+        const contact = contacts[0];
+        if (contact.name && contact.name[0]) {
+          setNome(contact.name[0].trim());
+        }
+        if (contact.tel && contact.tel[0]) {
+          // Remove caracteres não numéricos e formata
+          const cleanPhone = contact.tel[0].replace(/\D/g, '');
+          setTelefone(cleanPhone);
+        }
+
+        const contactName = (contact.name && contact.name[0]) || 'Selecionado';
+        setSuccessContactMsg(`Contato "${contactName}" importado com sucesso!`);
+        setTimeout(() => setSuccessContactMsg(null), 4000);
+      }
+    } catch (error: any) {
+      console.error('Erro ao acessar contatos:', error);
+      const errMsg = error?.message || '';
+
+      if (errMsg.includes('top frame') || error?.name === 'SecurityError') {
+        setErrorMsg('Acesso restrito pelo preview: a agenda só pode ser acessada no frame principal do navegador. Abra o app em uma aba separada no smartphone.');
+      } else if (error?.name !== 'AbortError') {
+        setErrorMsg('Seleção cancelada ou permissão não concedida. Você pode preencher os dados manualmente.');
+      }
+    } finally {
+      setIsImportingContact(false);
+    }
+  };
 
   const handleAvatarFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -251,6 +334,86 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             <span>{errorMsg}</span>
           </div>
         )}
+
+        {successContactMsg && (
+          <div className="mt-4 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+            <span>{successContactMsg}</span>
+          </div>
+        )}
+
+        {/* Botão de Ação: Importar dos Contatos Nativo */}
+        <div className="mt-4 p-3 rounded-xl border border-cyan-500/20 bg-gradient-to-r from-cyan-950/40 to-emerald-950/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shrink-0">
+              <Smartphone className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>Agilidade no Cadastro</span>
+                {isContactSupported && !inIframe ? (
+                  <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded">
+                    Disponível no seu aparelho
+                  </span>
+                ) : inIframe ? (
+                  <span className="text-[10px] font-medium text-amber-300 bg-amber-500/20 px-1.5 py-0.2 rounded flex items-center gap-1 border border-amber-500/30">
+                    <Info className="h-3 w-3" /> Modo Preview (Iframe)
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium text-slate-400 bg-white/5 px-1.5 py-0.2 rounded flex items-center gap-1">
+                    <Info className="h-3 w-3" /> Mobile Chrome/Android
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-300">
+                {inIframe
+                  ? 'No preview embutido os navegadores bloqueiam a agenda. Abra em aba direta ou preencha manualmente.'
+                  : 'Puxe o Nome e o WhatsApp do aluno direto da agenda do seu smartphone com 1 toque.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {inIframe && (
+              <a
+                href={window.location.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir aplicativo em uma nova aba completa para permitir o uso da agenda"
+                className="px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition-colors"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Abrir em Nova Aba</span>
+              </a>
+            )}
+
+            <button
+              type="button"
+              id="btn-import-contacts"
+              onClick={handleImportContact}
+              disabled={isImportingContact}
+              title={
+                inIframe
+                  ? 'A Contacts API requer execução no top frame (fora do iframe do preview). Clique em "Abrir em Nova Aba" ou preencha manualmente.'
+                  : isContactSupported
+                  ? 'Abrir agenda do celular para selecionar o contato'
+                  : 'A Contact Picker API nativa funciona no Chrome em smartphones.'
+              }
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all shadow-md active:scale-95 cursor-pointer shrink-0 ${
+                isContactSupported && !inIframe
+                  ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-black shadow-cyan-500/20'
+                  : 'border border-cyan-500/40 bg-cyan-950/40 text-cyan-200 hover:bg-cyan-900/50 hover:border-cyan-400/60'
+              } ${isImportingContact ? 'opacity-75 cursor-wait' : ''}`}
+            >
+              {isImportingContact ? (
+                <Loader2 className="h-4 w-4 animate-spin text-cyan-300 shrink-0" />
+              ) : (
+                <Contact className="h-4 w-4 shrink-0" />
+              )}
+              <span>{isImportingContact ? 'Abrindo agenda...' : 'Importar dos Contatos 📱'}</span>
+            </button>
+          </div>
+        </div>
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-xs">
