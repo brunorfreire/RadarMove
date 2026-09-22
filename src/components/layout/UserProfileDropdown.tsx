@@ -51,6 +51,24 @@ export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownPr
           } else {
             setInitials(displayName.slice(0, 2).toUpperCase())
           }
+        } else {
+          // Lê perfil persistido se disponível
+          try {
+            const raw = localStorage.getItem('radarmove_perfil_treinador')
+            if (raw) {
+              const saved = JSON.parse(raw)
+              if (saved?.nome) {
+                setUserName(saved.nome)
+                const parts = saved.nome.trim().split(' ')
+                setInitials(parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : saved.nome.slice(0, 2).toUpperCase())
+              }
+              if (saved?.avatarUrl) {
+                setAvatarUrl(saved.avatarUrl)
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
         }
       } catch (error) {
         console.error('Erro ao carregar usuário autenticado:', error)
@@ -233,6 +251,12 @@ export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownPr
         onClose={() => setIsProfileModalOpen(false)}
         onProfileUpdated={(data) => {
           setUserName(data.nome)
+          const parts = data.nome.trim().split(' ')
+          if (parts.length >= 2) {
+            setInitials(`${parts[0][0]}${parts[1][0]}`.toUpperCase())
+          } else {
+            setInitials(data.nome.slice(0, 2).toUpperCase())
+          }
           if (data.avatarUrl) {
             setAvatarUrl(data.avatarUrl)
           }

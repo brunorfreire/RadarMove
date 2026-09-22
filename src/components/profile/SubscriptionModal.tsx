@@ -81,10 +81,10 @@ export function SubscriptionModal({ isOpen, onClose }: SubscriptionModalProps) {
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
-                    Plano Personal Trainer Pro
+                    Plano Pro Ativo
                   </span>
                   <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-black text-white">R$ 97,00</span>
+                    <span className="text-2xl font-black text-white">R$ 49,90</span>
                     <span className="text-xs text-zinc-400">/mês</span>
                   </div>
                 </div>
@@ -92,7 +92,7 @@ export function SubscriptionModal({ isOpen, onClose }: SubscriptionModalProps) {
                 <div className="text-right">
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-300 border border-emerald-500/40">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    Status Ativo
+                    Plano Pro Ativo
                   </span>
                   <p className="text-[10px] text-zinc-400 mt-1 flex items-center justify-end gap-1">
                     <Calendar className="h-3 w-3" />

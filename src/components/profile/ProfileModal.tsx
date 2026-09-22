@@ -65,13 +65,22 @@ export function ProfileModal({ isOpen, onClose, onProfileUpdated }: ProfileModal
         const user = authData?.user
 
         if (!user) {
-          // Fallback para demonstração sem sessão ativa
+          // Fallback para demonstração sem sessão ativa com leitura do localStorage se já tiver sido salvo
+          let savedLocal: any = null
+          try {
+            const raw = localStorage.getItem('radarmove_perfil_treinador')
+            if (raw) savedLocal = JSON.parse(raw)
+          } catch (e) {
+            // ignore
+          }
+
           setUserId('guest-demo')
-          setNome('Treinador Rodrigo Silva')
+          setNome(savedLocal?.nome || 'Treinador Rodrigo Silva')
           setEmail('treinador@radarmove.com.br')
-          setEmpresa('RadarMove Studio')
-          setTelefone('(11) 98765-4321')
-          setAvatarUrl(null)
+          setEmpresa(savedLocal?.empresa || 'RadarMove Studio')
+          setTelefone(savedLocal?.telefone || '(11) 98765-4321')
+          setAvatarUrl(savedLocal?.avatarUrl || null)
+          if (savedLocal?.corPrimaria) setCorPrimaria(savedLocal.corPrimaria)
           setLoading(false)
           return
         }
@@ -201,6 +210,23 @@ export function ProfileModal({ isOpen, onClose, onProfileUpdated }: ProfileModal
             avatar_url: avatarUrl,
           },
         })
+      }
+
+      // 3. Persistência local (localStorage) como fallback resiliente e instantâneo
+      try {
+        localStorage.setItem(
+          'radarmove_perfil_treinador',
+          JSON.stringify({
+            nome: nome.trim(),
+            empresa: empresa.trim(),
+            telefone: telefone.trim(),
+            avatarUrl: avatarUrl || undefined,
+            corPrimaria,
+            updatedAt: new Date().toISOString(),
+          })
+        )
+      } catch (localErr) {
+        console.warn('Erro ao salvar perfil no localStorage:', localErr)
       }
 
       setSuccessMessage('Perfil atualizado com sucesso!')

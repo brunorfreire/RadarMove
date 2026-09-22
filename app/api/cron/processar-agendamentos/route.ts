@@ -16,9 +16,9 @@ async function enviarMensagemWhatsApp(telefone: string, mensagem: string): Promi
   // Higieniza o número (deixa apenas números)
   const telefoneLimpo = telefone.replace(/\D/g, '')
 
-  // Se não houver gateway configurado no .env, registra no log em modo simulação/desenvolvimento
-  if (!apiUrl) {
-    console.log(`[SIMULAÇÃO WHATSAPP] Para: ${telefoneLimpo} | Texto: ${mensagem.slice(0, 80)}...`)
+  // Fallback e Mock defensivo: Se as chaves do WhatsApp não existirem, simula o envio com console.log e retorna sucesso 200
+  if (!apiUrl || !process.env.WHATSAPP_API_URL) {
+    console.log(`[RADARMOVE WHATSAPP MOCK / SIMULAÇÃO] Para: ${telefoneLimpo || 'N/A'} | Mensagem: ${mensagem.slice(0, 100)}...`)
     return { success: true }
   }
 

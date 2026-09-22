@@ -161,9 +161,9 @@ export default function PerfilPage() {
         <div className="flex items-center justify-between border-b border-emerald-500/15 pb-5 mb-6">
           <div className="flex items-center gap-3">
             <a
-              href="/dashboard"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/20 bg-[#031d17] text-zinc-400 hover:text-white hover:border-emerald-500/50 transition-colors"
-              title="Voltar ao Dashboard"
+              href="/"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/20 bg-[#031d17] text-zinc-400 hover:text-white hover:border-emerald-500/50 transition-colors cursor-pointer"
+              title="Voltar ao RadarMove"
             >
               <ArrowLeft className="h-4 w-4" />
             </a>
