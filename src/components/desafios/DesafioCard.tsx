@@ -22,7 +22,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Compass,
-  Target
+  Target,
+  Calendar
 } from 'lucide-react';
 import { DesafioTemplate, CategoriaDesafio, Aluno, DesafioEnviado } from '../../types';
 import { openWhatsApp } from '../../lib/whatsappUtils';
@@ -36,6 +37,7 @@ interface DesafioCardProps {
   onEdit?: (desafio: DesafioTemplate) => void;
   onDelete?: (id: string) => void;
   onQuickSendWhatsApp?: (aluno: Aluno, desafio: DesafioTemplate, customMessage: string) => void;
+  onAgendar?: (desafio: DesafioTemplate, aluno?: Aluno) => void;
 }
 
 export const DesafioCard: React.FC<DesafioCardProps> = ({
@@ -46,6 +48,7 @@ export const DesafioCard: React.FC<DesafioCardProps> = ({
   onEdit,
   onDelete,
   onQuickSendWhatsApp,
+  onAgendar,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
@@ -371,6 +374,18 @@ export const DesafioCard: React.FC<DesafioCardProps> = ({
                 </span>
               </button>
 
+              {onAgendar && (
+                <button
+                  type="button"
+                  id={`btn-agendar-shelf-${desafio.id}`}
+                  onClick={() => onAgendar(desafio, selectedAluno)}
+                  className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-emerald-500/30 bg-[#021813] text-emerald-300 hover:bg-[#03241c] hover:border-emerald-400 text-xs font-bold transition-all cursor-pointer"
+                >
+                  <Calendar className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Agendar</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => onDisparar(desafio)}
@@ -445,6 +460,22 @@ export const DesafioCard: React.FC<DesafioCardProps> = ({
 
         {/* Primary CTA: Toggle Options or Disparar */}
         <div className="flex items-center gap-1.5">
+          {onAgendar && (
+            <button
+              type="button"
+              id={`btn-agendar-footer-${desafio.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAgendar(desafio, alunos.find(a => a.id === selectedAlunoId) || alunos[0]);
+              }}
+              title="Agendar disparo programado"
+              className="flex items-center gap-1 rounded-xl border border-emerald-500/30 bg-[#021813] px-2.5 py-1.5 text-xs font-bold text-emerald-300 hover:bg-[#03241c] hover:border-emerald-400 active:scale-95 transition-all cursor-pointer"
+            >
+              <Calendar className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Agendar</span>
+            </button>
+          )}
+
           <button
             type="button"
             id={`btn-opcoes-${desafio.id}`}

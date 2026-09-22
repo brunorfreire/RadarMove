@@ -7,6 +7,7 @@ import { AlunoFormModal } from './AlunoFormModal';
 import { EvolucaoFotosSection } from './EvolucaoFotosSection';
 import { HistoricoDesafiosAluno } from './HistoricoDesafiosAluno';
 import { SendChallengeModal } from '../dashboard/SendChallengeModal';
+import { AgendamentoModal } from '../desafios/AgendamentoModal';
 import { Aluno, AvaliacaoFisica, DesafioTemplate, RadarAlerta, FotoEvolucao, DesafioEnviado } from '../../types';
 import { calcularBadgesDoAluno } from '../../lib/badges';
 import { 
@@ -74,6 +75,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
   const [filterStatus, setFilterStatus] = useState<'todos' | 'ativo' | 'em_risco' | 'badges'>('todos');
   const [mainSectionTab, setMainSectionTab] = useState<'fotos' | 'bioimpedancia' | 'desafios' | 'tudo'>('fotos');
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
+  const [isAgendamentoModalOpen, setIsAgendamentoModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [alunoToEdit, setAlunoToEdit] = useState<Aluno | null>(null);
@@ -484,6 +486,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
               aluno={activeAluno}
               historico={historico}
               onOpenNewChallengeForAluno={() => setIsChallengeModalOpen(true)}
+              onAgendarDesafio={() => setIsAgendamentoModalOpen(true)}
               onReenviarDesafio={onReenviarDesafio}
             />
           )}
@@ -517,6 +520,18 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
           onOpenVoiceModalForAluno={onOpenVoiceModalForAluno}
         />
       )}
+
+      {/* Modal para Agendar Envio Programado */}
+      <AgendamentoModal
+        isOpen={isAgendamentoModalOpen}
+        onClose={() => setIsAgendamentoModalOpen(false)}
+        desafio={templates[0] || null}
+        alunos={alunos}
+        alunoPreSelecionado={activeAluno}
+        onAgendamentoCriado={() => {
+          showToast(`Desafio programado com sucesso para ${activeAluno?.nome.split(' ')[0]}!`);
+        }}
+      />
 
       {/* Modal para Adicionar Novo Aluno (Simples, Fácil e Rápido) */}
       <AlunoFormModal

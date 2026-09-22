@@ -12,6 +12,8 @@ import {
   ExternalLink 
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
+import { ProfileModal } from '../profile/ProfileModal'
+import { SubscriptionModal } from '../profile/SubscriptionModal'
 
 interface UserProfileDropdownProps {
   collapsed?: boolean
@@ -19,8 +21,11 @@ interface UserProfileDropdownProps {
 
 export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>('Treinador')
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [initials, setInitials] = useState<string>('TR')
   const [loading, setLoading] = useState(true)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -89,9 +94,14 @@ export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownPr
     window.location.href = '/login'
   }
 
-  const navigateTo = (path: string) => {
+  const handleOpenProfileModal = () => {
     setIsOpen(false)
-    window.location.href = path
+    setIsProfileModalOpen(true)
+  }
+
+  const handleOpenSubscriptionModal = () => {
+    setIsOpen(false)
+    setIsSubscriptionModalOpen(true)
   }
 
   return (
@@ -108,9 +118,17 @@ export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownPr
         }`}
       >
         <div className="relative flex-shrink-0">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500/30 to-teal-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs tracking-wider shadow-sm">
-            {loading ? '...' : initials}
-          </div>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={userName}
+              className="h-9 w-9 rounded-lg object-cover border border-emerald-500/40 shadow-sm"
+            />
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500/30 to-teal-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs tracking-wider shadow-sm">
+              {loading ? '...' : initials}
+            </div>
+          )}
           <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-[#021813]" />
         </div>
 
@@ -160,23 +178,27 @@ export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownPr
               )}
             </div>
 
-            {/* Itens do Menu */}
+            {/* Itens do Menu (Acionam Modais diretamente, sem 404) */}
             <div className="space-y-0.5">
               <button
                 type="button"
-                onClick={() => navigateTo('/perfil')}
+                id="btn-open-profile-modal"
+                onClick={handleOpenProfileModal}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-zinc-200 rounded-lg hover:bg-emerald-500/15 hover:text-white transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
                   <UserIcon className="w-4 h-4 text-emerald-400" />
                   <span>Minha Conta / Perfil</span>
                 </div>
-                <ExternalLink className="w-3 h-3 text-zinc-500" />
+                <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                  Editar
+                </span>
               </button>
 
               <button
                 type="button"
-                onClick={() => navigateTo('/assinatura')}
+                id="btn-open-subscription-modal"
+                onClick={handleOpenSubscriptionModal}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-zinc-200 rounded-lg hover:bg-cyan-500/15 hover:text-white transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
@@ -204,6 +226,24 @@ export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownPr
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Edição de Perfil */}
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        onProfileUpdated={(data) => {
+          setUserName(data.nome)
+          if (data.avatarUrl) {
+            setAvatarUrl(data.avatarUrl)
+          }
+        }}
+      />
+
+      {/* Modal de Assinatura */}
+      <SubscriptionModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+      />
     </div>
   )
 }

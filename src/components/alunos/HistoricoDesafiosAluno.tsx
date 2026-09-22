@@ -18,7 +18,8 @@ import {
   HeartPulse,
   Flame,
   CheckCircle2,
-  Compass
+  Compass,
+  Calendar
 } from 'lucide-react';
 import { Aluno, DesafioEnviado, CategoriaDesafio } from '../../types';
 import { openWhatsApp } from '../../lib/whatsappUtils';
@@ -29,6 +30,7 @@ interface HistoricoDesafiosAlunoProps {
   onOpenNewChallengeForAluno?: (aluno: Aluno) => void;
   onResendChallengeWhatsApp?: (aluno: Aluno, desafioEnviado: DesafioEnviado) => void;
   onReenviarDesafio?: (aluno: Aluno, desafioTitulo: string, mensagem: string) => void;
+  onAgendarDesafio?: (aluno: Aluno) => void;
 }
 
 export const HistoricoDesafiosAluno: React.FC<HistoricoDesafiosAlunoProps> = ({
@@ -37,6 +39,7 @@ export const HistoricoDesafiosAluno: React.FC<HistoricoDesafiosAlunoProps> = ({
   onOpenNewChallengeForAluno,
   onResendChallengeWhatsApp,
   onReenviarDesafio,
+  onAgendarDesafio,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [categoriaFilter, setCategoriaFilter] = useState<string>('Todas');
@@ -133,17 +136,31 @@ export const HistoricoDesafiosAluno: React.FC<HistoricoDesafiosAlunoProps> = ({
             </div>
           </div>
 
-          {onOpenNewChallengeForAluno && (
-            <button
-              type="button"
-              id="btn-enviar-novo-desafio-aluno"
-              onClick={() => onOpenNewChallengeForAluno(aluno)}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 text-slate-950 font-black text-xs shadow-md shadow-cyan-500/20 hover:brightness-110 active:scale-95 transition-all cursor-pointer self-start md:self-auto"
-            >
-              <Send className="h-3.5 w-3.5 fill-slate-950 text-slate-950" />
-              <span>Disparar Novo Desafio</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+            {onAgendarDesafio && (
+              <button
+                type="button"
+                id="btn-agendar-desafio-aluno"
+                onClick={() => onAgendarDesafio(aluno)}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 font-bold text-xs hover:bg-cyan-500/20 active:scale-95 transition-all cursor-pointer"
+              >
+                <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+                <span>Agendar Envio</span>
+              </button>
+            )}
+
+            {onOpenNewChallengeForAluno && (
+              <button
+                type="button"
+                id="btn-enviar-novo-desafio-aluno"
+                onClick={() => onOpenNewChallengeForAluno(aluno)}
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 text-slate-950 font-black text-xs shadow-md shadow-cyan-500/20 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              >
+                <Send className="h-3.5 w-3.5 fill-slate-950 text-slate-950" />
+                <span>Disparar Novo Desafio</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 3 Metric Pills */}

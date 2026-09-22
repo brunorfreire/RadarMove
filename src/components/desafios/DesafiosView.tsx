@@ -21,6 +21,7 @@ import { CategoriasExplainer } from './CategoriasExplainer';
 import { DesafioCard } from './DesafioCard';
 import { DispararDesafioModal } from './DispararDesafioModal';
 import { NovoDesafioModal } from './NovoDesafioModal';
+import { AgendamentoModal } from './AgendamentoModal';
 import { DesafioTemplate, Aluno, WhatsAppMensagem, CategoriaDesafio, DesafioEnviado } from '../../types';
 
 interface DesafiosViewProps {
@@ -52,6 +53,8 @@ export const DesafiosView: React.FC<DesafiosViewProps> = ({
 
   // Modals state
   const [activeDesafioToDispatch, setActiveDesafioToDispatch] = useState<DesafioTemplate | null>(null);
+  const [activeDesafioToSchedule, setActiveDesafioToSchedule] = useState<DesafioTemplate | null>(null);
+  const [alunoToSchedule, setAlunoToSchedule] = useState<Aluno | null>(null);
   const [isNovoModalOpen, setIsNovoModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<DesafioTemplate | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -358,6 +361,10 @@ export const DesafiosView: React.FC<DesafiosViewProps> = ({
                 onEdit={handleOpenEdit}
                 onDelete={handleDeleteTemplate}
                 onQuickSendWhatsApp={handleQuickSendWhatsApp}
+                onAgendar={(t, a) => {
+                  setActiveDesafioToSchedule(t);
+                  setAlunoToSchedule(a || null);
+                }}
               />
             ))}
           </div>
@@ -404,9 +411,29 @@ export const DesafiosView: React.FC<DesafiosViewProps> = ({
         alunos={alunos}
         historico={historico}
         onDisparoConcluido={handleDisparoModalConcluido}
+        onAbrirAgendamento={(t, a) => {
+          setActiveDesafioToSchedule(t);
+          setAlunoToSchedule(a || null);
+        }}
       />
 
-      {/* 2. Modal de Criação / Edição de Template */}
+      {/* 2. Modal de Agendamento Programado de Desafio */}
+      <AgendamentoModal
+        isOpen={!!activeDesafioToSchedule}
+        onClose={() => {
+          setActiveDesafioToSchedule(null);
+          setAlunoToSchedule(null);
+        }}
+        desafio={activeDesafioToSchedule}
+        alunos={alunos}
+        alunoPreSelecionado={alunoToSchedule}
+        onAgendamentoCriado={(agendamento) => {
+          setToastMessage(`Desafio agendado com sucesso! O RadarMove disparará automaticamente.`);
+          setTimeout(() => setToastMessage(null), 4000);
+        }}
+      />
+
+      {/* 3. Modal de Criação / Edição de Template */}
       <NovoDesafioModal
         isOpen={isNovoModalOpen}
         onClose={() => {

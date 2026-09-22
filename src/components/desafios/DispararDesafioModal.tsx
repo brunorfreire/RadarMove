@@ -11,7 +11,8 @@ import {
   Search,
   MessageSquare,
   Clock,
-  Phone
+  Phone,
+  Calendar
 } from 'lucide-react';
 import { Aluno, DesafioTemplate, WhatsAppMensagem, DesafioEnviado } from '../../types';
 import { verificarDesafioRepetido } from '../../lib/historicoDesafiosUtils';
@@ -29,6 +30,7 @@ interface DispararDesafioModalProps {
     customMessage: string,
     abrirWhatsAppWeb: boolean
   ) => void;
+  onAbrirAgendamento?: (desafio: DesafioTemplate, aluno?: Aluno) => void;
 }
 
 export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
@@ -38,6 +40,7 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
   alunos,
   historico = [],
   onDisparoConcluido,
+  onAbrirAgendamento,
 }) => {
   if (!isOpen || !desafio) return null;
 
@@ -409,6 +412,22 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
             >
               Cancelar
             </button>
+
+            {onAbrirAgendamento && (
+              <button
+                type="button"
+                id="btn-abrir-agendamento-modal"
+                onClick={() => {
+                  onClose();
+                  onAbrirAgendamento(desafio, selectedAluno);
+                }}
+                title="Programar data e hora para disparo automático via WhatsApp"
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-xs font-bold text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 active:scale-95 transition-all cursor-pointer"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                <span>Agendar Envio</span>
+              </button>
+            )}
 
             {mode === 'individual' ? (
               <>
