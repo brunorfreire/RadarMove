@@ -41,9 +41,21 @@
       })();
     </script>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>RadarMove - Retenção para Personal Trainers</title>
     <meta name="description" content="Micro SaaS focado em retenção de alunos, bioimpedância, desafios via WhatsApp e funil de conversão de leads para Personal Trainers." />
+    
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#022c22" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="RadarMove" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+
     <meta property="og:title" content="RadarMove - Retenção para Personal Trainers" />
     <meta property="og:description" content="Micro SaaS focado em retenção de alunos, bioimpedância, desafios via WhatsApp e funil de conversão de leads para Personal Trainers." />
     <meta property="og:type" content="website" />
@@ -54,6 +66,20 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Registro resiliente do Service Worker para suporte PWA
+      if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js')
+            .then(function(reg) {
+              console.log('RadarMove: ServiceWorker registrado com sucesso:', reg.scope);
+            })
+            .catch(function(err) {
+              console.log('RadarMove: Falha ao registrar ServiceWorker:', err);
+            });
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

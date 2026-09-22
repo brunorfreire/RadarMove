@@ -12,6 +12,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { Aluno, RadarAlerta } from '../../types';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 interface TopbarProps {
   onToggleMobileSidebar: () => void;
@@ -132,7 +133,10 @@ export const Topbar: React.FC<TopbarProps> = ({
       </div>
 
       {/* Right: Actions, Voice Recording & Status */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
+        {/* Botão de Instalação PWA na Tela Inicial */}
+        <PWAInstallButton />
+
         {/* BOTÃO PRINCIPAL DE VOZ (Destaque para a solicitação do usuário) */}
         <button
           id="topbar-voice-record-btn"

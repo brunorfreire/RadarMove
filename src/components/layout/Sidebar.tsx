@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Profissional } from '../../types';
 import { UserProfileDropdown } from './UserProfileDropdown';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 interface SidebarProps {
   activeTab: 'dashboard' | 'alunos' | 'desafios' | 'leads' | 'supabase';
@@ -212,7 +213,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Footer Profile / Tenant Info com Dropdown Dinâmico Supabase */}
-      <div className="border-t border-emerald-500/10 p-3">
+      <div className="border-t border-emerald-500/10 p-3 space-y-2">
+        {!collapsed && <PWAInstallButton variant="sidebar" />}
         <UserProfileDropdown collapsed={collapsed} />
       </div>
     </aside>
