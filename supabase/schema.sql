@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS public.alunos (
     profissional_id UUID NOT NULL REFERENCES public.profissionais(id) ON DELETE CASCADE,
     nome VARCHAR(150) NOT NULL,
     telefone VARCHAR(25) NOT NULL,
+    altura NUMERIC, -- Altura do aluno em cm ou metros
     data_nascimento DATE,
     status VARCHAR(20) DEFAULT 'ativo' CHECK (status IN ('ativo', 'inativo', 'em_risco')),
     ultimo_checkin TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()),
@@ -38,6 +39,13 @@ CREATE TABLE IF NOT EXISTS public.alunos (
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
+
+-- Adiciona a coluna 'altura' à tabela de alunos se ela não existir (Migration retrocompatível)
+ALTER TABLE public.alunos 
+ADD COLUMN IF NOT EXISTS altura NUMERIC;
+
+-- Recarrega o cache de schema da API do Supabase PostgREST
+NOTIFY pgrst, 'reload config';
 
 COMMENT ON TABLE public.alunos IS 'Alunos matriculados sob a tutela do personal trainer';
 

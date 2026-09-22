@@ -157,7 +157,7 @@ export default function App() {
           dias_sem_treino: typeof a.dias_sem_treino === 'number' ? a.dias_sem_treino : 0,
           plano: a.plano || 'Presencial',
           frequencia_semanal: a.frequencia_semanal || 3,
-          altura_cm: a.altura_cm,
+          altura_cm: a.altura !== undefined && a.altura !== null ? Number(a.altura) : (a.altura_cm ? Number(a.altura_cm) : 175),
         }));
 
         setAlunos(alunosList);
@@ -236,17 +236,22 @@ export default function App() {
 
     if (session?.user?.id) {
       try {
-        await supabase.from('alunos').insert({
-          id: alunoComUser.id.startsWith('aluno-') ? undefined : alunoComUser.id,
+        const payload: Record<string, any> = {
           profissional_id: session.user.id,
           nome: alunoComUser.nome,
           telefone: alunoComUser.telefone,
-          status: alunoComUser.status,
-          plano: alunoComUser.plano,
+          status: alunoComUser.status || 'ativo',
           objetivo: alunoComUser.objetivo,
-          dias_sem_treino: alunoComUser.dias_sem_treino,
-          frequencia_semanal: alunoComUser.frequencia_semanal,
-        });
+          altura: alunoComUser.altura_cm ? Number(alunoComUser.altura_cm) : null,
+        };
+        if (alunoComUser.avatar_url) payload.avatar_url = alunoComUser.avatar_url;
+        if (alunoComUser.data_nascimento) payload.data_nascimento = alunoComUser.data_nascimento;
+
+        let { error } = await supabase.from('alunos').insert([payload]);
+        if (error && (error.message?.includes("'altura'") || error.message?.includes('schema cache'))) {
+          const { altura, ...payloadWithoutAltura } = payload;
+          await supabase.from('alunos').insert([payloadWithoutAltura]);
+        }
       } catch (err) {
         console.error('Erro ao persistir novo aluno no Supabase:', err);
       }
@@ -320,18 +325,25 @@ export default function App() {
       const currentUserId = user?.id || session?.user?.id;
 
       if (currentUserId) {
-        const { data, error } = await supabase.from('alunos').insert([{
+        const payload: Record<string, any> = {
           nome: novoAluno.nome,
           telefone: novoAluno.telefone,
           altura: novoAluno.altura_cm ? Number(novoAluno.altura_cm) : null,
-          altura_cm: novoAluno.altura_cm ? Number(novoAluno.altura_cm) : null,
           objetivo: novoAluno.objetivo,
-          plano: novoAluno.plano,
-          frequencia_semanal: novoAluno.frequencia_semanal || 3,
           status: novoAluno.status || 'ativo',
-          dias_sem_treino: novoAluno.dias_sem_treino || 0,
           profissional_id: currentUserId,
-        }]).select().maybeSingle();
+        };
+        if (novoAluno.avatar_url) payload.avatar_url = novoAluno.avatar_url;
+        if (novoAluno.data_nascimento) payload.data_nascimento = novoAluno.data_nascimento;
+
+        let { data, error } = await supabase.from('alunos').insert([payload]).select().maybeSingle();
+
+        if (error && (error.message?.includes("'altura'") || error.message?.includes('schema cache'))) {
+          const { altura, ...payloadWithoutAltura } = payload;
+          const retry = await supabase.from('alunos').insert([payloadWithoutAltura]).select().maybeSingle();
+          data = retry.data;
+          error = retry.error;
+        }
 
         if (error) {
           console.error('Erro ao inserir aluno no Supabase:', error);
@@ -350,18 +362,30 @@ export default function App() {
 
     if (session?.user?.id) {
       try {
-        await supabase
+        const updatePayload: Record<string, any> = {
+          nome: alunoAtualizado.nome,
+          telefone: alunoAtualizado.telefone,
+          status: alunoAtualizado.status,
+          objetivo: alunoAtualizado.objetivo,
+          altura: alunoAtualizado.altura_cm ? Number(alunoAtualizado.altura_cm) : null,
+        };
+        if (alunoAtualizado.avatar_url) updatePayload.avatar_url = alunoAtualizado.avatar_url;
+        if (alunoAtualizado.data_nascimento) updatePayload.data_nascimento = alunoAtualizado.data_nascimento;
+
+        let { error: updateError } = await supabase
           .from('alunos')
-          .update({
-            nome: alunoAtualizado.nome,
-            telefone: alunoAtualizado.telefone,
-            status: alunoAtualizado.status,
-            plano: alunoAtualizado.plano,
-            objetivo: alunoAtualizado.objetivo,
-            altura_cm: alunoAtualizado.altura_cm,
-          })
+          .update(updatePayload)
           .eq('id', alunoAtualizado.id)
           .eq('profissional_id', session.user.id);
+
+        if (updateError && (updateError.message?.includes("'altura'") || updateError.message?.includes('schema cache'))) {
+          const { altura, ...updateWithoutAltura } = updatePayload;
+          await supabase
+            .from('alunos')
+            .update(updateWithoutAltura)
+            .eq('id', alunoAtualizado.id)
+            .eq('profissional_id', session.user.id);
+        }
       } catch (e) {
         // ignore
       }

@@ -276,25 +276,41 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
 
           const profissionalId = user?.id || currentUserId;
 
-          // Inserção no Supabase com profissional_id explícito
-          const { data: insertedData, error: insertError } = await supabase
+          // Inserção no Supabase com profissional_id explícito e coluna altura
+          const insertPayload: Record<string, any> = {
+            nome: nome.trim(),
+            telefone: phoneFormatted,
+            altura: alturaNum ? Number(alturaNum) : null,
+            objetivo,
+            status: 'ativo',
+            profissional_id: profissionalId,
+          };
+          if (dataNascimento) insertPayload.data_nascimento = dataNascimento;
+          if (avatarUrl.trim()) insertPayload.avatar_url = avatarUrl.trim();
+
+          let { data: insertedData, error: insertError } = await supabase
             .from('alunos')
-            .insert([{
-              nome: nome.trim(),
-              telefone: phoneFormatted,
-              altura: alturaNum,
-              altura_cm: alturaNum,
-              objetivo,
-              plano,
-              frequencia_semanal: frequenciaSemanal,
-              status: 'ativo',
-              dias_sem_treino: 0,
-              data_nascimento: dataNascimento,
-              avatar_url: avatarUrl.trim() || null,
-              profissional_id: profissionalId,
-            }])
+            .insert([insertPayload])
             .select()
             .single();
+
+          // Se a coluna 'altura' ainda não foi criada no Supabase (cache de schema desatualizado ou migration pendente)
+          if (insertError && (insertError.message?.includes("'altura'") || insertError.message?.includes('schema cache'))) {
+            console.warn("Coluna 'altura' não encontrada no cache do Supabase. Executando fallback sem 'altura'...", insertError.message);
+            const { altura, ...payloadWithoutAltura } = insertPayload;
+            const retryResult = await supabase
+              .from('alunos')
+              .insert([payloadWithoutAltura])
+              .select()
+              .single();
+
+            if (!retryResult.error) {
+              insertedData = retryResult.data;
+              insertError = null;
+            } else {
+              insertError = retryResult.error;
+            }
+          }
 
           if (insertError) {
             console.error('Erro ao inserir aluno no Supabase:', insertError);
@@ -308,8 +324,8 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             telefone: insertedData?.telefone || phoneFormatted,
             altura_cm: alturaNum,
             objetivo: insertedData?.objetivo || objetivo,
-            plano: insertedData?.plano || plano,
-            frequencia_semanal: insertedData?.frequencia_semanal || frequenciaSemanal,
+            plano,
+            frequencia_semanal: frequenciaSemanal,
             status: (insertedData?.status as AlunoStatus) || 'ativo',
             dias_sem_treino: 0,
             ultimo_checkin: new Date().toISOString().split('T')[0],
@@ -334,22 +350,31 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
           };
 
           if (currentUserId) {
-            const { error: updateError } = await supabase
+            const updatePayload: Record<string, any> = {
+              nome: nome.trim(),
+              telefone: phoneFormatted,
+              altura: alturaNum ? Number(alturaNum) : null,
+              objetivo,
+              status,
+              data_nascimento: dataNascimento,
+              avatar_url: avatarUrl.trim() || null,
+            };
+
+            let { error: updateError } = await supabase
               .from('alunos')
-              .update({
-                nome: nome.trim(),
-                telefone: phoneFormatted,
-                altura_cm: alturaNum,
-                altura: alturaNum,
-                objetivo,
-                plano,
-                frequencia_semanal: frequenciaSemanal,
-                status,
-                data_nascimento: dataNascimento,
-                avatar_url: avatarUrl.trim() || null,
-              })
+              .update(updatePayload)
               .eq('id', alunoToEdit.id)
               .eq('profissional_id', currentUserId);
+
+            if (updateError && (updateError.message?.includes("'altura'") || updateError.message?.includes('schema cache'))) {
+              const { altura, ...updateWithoutAltura } = updatePayload;
+              const retryUpdate = await supabase
+                .from('alunos')
+                .update(updateWithoutAltura)
+                .eq('id', alunoToEdit.id)
+                .eq('profissional_id', currentUserId);
+              updateError = retryUpdate.error;
+            }
 
             if (updateError) {
               console.error('Erro ao atualizar aluno no Supabase:', updateError);
