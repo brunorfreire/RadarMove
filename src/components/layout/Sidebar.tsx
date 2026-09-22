@@ -15,6 +15,7 @@ import {
   Target
 } from 'lucide-react';
 import { Profissional } from '../../types';
+import { UserProfileDropdown } from './UserProfileDropdown';
 
 interface SidebarProps {
   activeTab: 'dashboard' | 'alunos' | 'desafios' | 'leads' | 'supabase';
@@ -210,35 +211,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Footer Profile / Tenant Info */}
+      {/* Footer Profile / Tenant Info com Dropdown Dinâmico Supabase */}
       <div className="border-t border-emerald-500/10 p-3">
-        <div
-          id="tenant-profile-card"
-          className={`flex items-center gap-3 rounded-xl border border-emerald-500/10 bg-[#031c16]/70 p-2.5 transition-colors ${
-            collapsed ? 'justify-center p-2' : ''
-          }`}
-        >
-          <div className="relative flex-shrink-0">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs">
-              RS
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-[#021813]" />
-          </div>
-
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1">
-                <p className="truncate text-xs font-bold text-slate-200">
-                  {profissional.nome_profissional}
-                </p>
-                <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 flex-shrink-0" />
-              </div>
-              <p className="truncate text-[11px] text-emerald-400/80 font-medium">
-                {profissional.nome_empresa}
-              </p>
-            </div>
-          )}
-        </div>
+        <UserProfileDropdown collapsed={collapsed} />
       </div>
     </aside>
   );

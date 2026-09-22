@@ -29,7 +29,7 @@ export const QuickVoiceModal: React.FC<QuickVoiceModalProps> = ({
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
 
