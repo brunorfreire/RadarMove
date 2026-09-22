@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TopCards } from './TopCards';
 import { RadarRelacionamento } from './RadarRelacionamento';
 import { WhatsAppFeed } from './WhatsAppFeed';
 import { SendChallengeModal } from './SendChallengeModal';
 import { Aluno, RadarAlerta, WhatsAppMensagem, DesafioTemplate, DesafioEnviado } from '../../types';
+import { supabase } from '../../lib/supabaseClient';
 import { Sparkles, Mic, PlusCircle } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -31,9 +32,59 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [selectedAlertaForChallenge, setSelectedAlertaForChallenge] = useState<RadarAlerta | null>(null);
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
+  const [totalDesafiosEnviadosBanco, setTotalDesafiosEnviadosBanco] = useState<number>(0);
+
+  // Consulta a contagem real no Supabase na tabela de envios/agendamentos
+  useEffect(() => {
+    async function fetchTotalEnvios() {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+
+        if (userId) {
+          // Consulta tabela agendamentos_envios ou desafios_enviados
+          const { count, error } = await supabase
+            .from('agendamentos_envios')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'enviado')
+            .eq('profissional_id', userId);
+
+          if (!error && typeof count === 'number') {
+            setTotalDesafiosEnviadosBanco(count);
+          } else {
+            // Tenta consultar a tabela alternativa de envios caso exista
+            const { count: countAlt, error: errorAlt } = await supabase
+              .from('desafios_enviados')
+              .select('*', { count: 'exact', head: true })
+              .eq('profissional_id', userId);
+
+            if (!errorAlt && typeof countAlt === 'number') {
+              setTotalDesafiosEnviadosBanco(countAlt);
+            } else {
+              setTotalDesafiosEnviadosBanco(0);
+            }
+          }
+        } else {
+          setTotalDesafiosEnviadosBanco(0);
+        }
+      } catch (err) {
+        console.warn('Não foi possível obter contagem de envios do Supabase:', err);
+        setTotalDesafiosEnviadosBanco(0);
+      }
+    }
+
+    fetchTotalEnvios();
+  }, [historico]);
+
+  // Contagem final: soma do banco de dados + histórico da sessão atual
+  const contagemDesafiosEnviados = Math.max(totalDesafiosEnviadosBanco, historico.length);
 
   const alunosAtivosCount = alunos.filter((a) => a.status === 'ativo').length;
   const alunosEmRiscoCount = alunos.filter((a) => a.status === 'em_risco').length;
+
+  const taxaRetencaoCalculada = alunos.length > 0
+    ? Number((((alunos.length - alunosEmRiscoCount) / alunos.length) * 100).toFixed(1))
+    : 100;
 
   const handleOpenSendChallenge = (alerta: RadarAlerta) => {
     setSelectedAlertaForChallenge(alerta);
@@ -114,9 +165,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 1. TOP CARDS (4 Cards Superiores) */}
       <TopCards
         totalAlunos={alunos.length}
-        desafiosEnviados={142}
+        desafiosEnviados={contagemDesafiosEnviados}
         alunosEmRisco={alunosEmRiscoCount}
-        taxaRetencao={96.4}
+        taxaRetencao={taxaRetencaoCalculada}
       />
 
       {/* 2. GRID PRINCIPAL: Central Radar + Right WhatsApp Feed */}
