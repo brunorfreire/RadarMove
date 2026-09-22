@@ -19,7 +19,9 @@ import {
   Smartphone,
   Info,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Weight,
+  FileText
 } from 'lucide-react';
 import { Aluno, AlunoStatus } from '../../types';
 import { formatWhatsAppNumber } from '../../lib/whatsappUtils';
@@ -68,6 +70,9 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
   const [alturaCm, setAlturaCm] = useState<string>('175');
+  const [peso, setPeso] = useState<string>('');
+  const [genero, setGenero] = useState<string>('Masculino');
+  const [observacoes, setObservacoes] = useState<string>('');
   const [objetivo, setObjetivo] = useState('Hipertrofia & Força');
   const [plano, setPlano] = useState('Presencial VIP 3x/semana');
   const [frequenciaSemanal, setFrequenciaSemanal] = useState(3);
@@ -195,6 +200,9 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
           setTelefone(alunoToEdit.telefone);
         }
         setAlturaCm(alunoToEdit.altura_cm ? String(alunoToEdit.altura_cm) : '175');
+        setPeso(alunoToEdit.peso !== undefined && alunoToEdit.peso !== null ? String(alunoToEdit.peso) : '');
+        setGenero(alunoToEdit.genero || 'Masculino');
+        setObservacoes(alunoToEdit.observacoes || '');
         setObjetivo(alunoToEdit.objetivo || 'Hipertrofia & Força');
         setPlano(alunoToEdit.plano || 'Presencial VIP 3x/semana');
         setFrequenciaSemanal(alunoToEdit.frequencia_semanal || 3);
@@ -206,6 +214,9 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
         setNome('');
         setTelefone('');
         setAlturaCm('175');
+        setPeso('');
+        setGenero('Masculino');
+        setObservacoes('');
         setObjetivo('Hipertrofia & Força');
         setPlano('Presencial VIP 3x/semana');
         setFrequenciaSemanal(3);
@@ -276,7 +287,7 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
 
           const profissionalId = user?.id || currentUserId;
 
-          // Inserção no Supabase com profissional_id explícito e coluna altura
+          // Inserção no Supabase com profissional_id explícito e colunas adicionais
           const insertPayload: Record<string, any> = {
             nome: nome.trim(),
             telefone: phoneFormatted,
@@ -286,6 +297,9 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             profissional_id: profissionalId,
           };
           if (dataNascimento) insertPayload.data_nascimento = dataNascimento;
+          if (peso && !isNaN(Number(peso))) insertPayload.peso = Number(peso);
+          if (genero) insertPayload.genero = genero;
+          if (observacoes.trim()) insertPayload.observacoes = observacoes.trim();
           if (avatarUrl.trim()) insertPayload.avatar_url = avatarUrl.trim();
 
           let { data: insertedData, error: insertError } = await supabase
@@ -294,13 +308,19 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             .select()
             .single();
 
-          // Se a coluna 'altura' ainda não foi criada no Supabase (cache de schema desatualizado ou migration pendente)
-          if (insertError && (insertError.message?.includes("'altura'") || insertError.message?.includes('schema cache'))) {
-            console.warn("Coluna 'altura' não encontrada no cache do Supabase. Executando fallback sem 'altura'...", insertError.message);
-            const { altura, ...payloadWithoutAltura } = insertPayload;
+          // Se alguma coluna ainda não foi criada no Supabase (cache de schema desatualizado ou migration pendente)
+          if (insertError && (insertError.message?.includes('column') || insertError.message?.includes('schema cache'))) {
+            console.warn("Coluna não encontrada no cache do Supabase. Executando fallback seguro...", insertError.message);
+            const safePayload: Record<string, any> = {
+              nome: nome.trim(),
+              telefone: phoneFormatted,
+              objetivo,
+              status: 'ativo',
+              profissional_id: profissionalId,
+            };
             const retryResult = await supabase
               .from('alunos')
-              .insert([payloadWithoutAltura])
+              .insert([safePayload])
               .select()
               .single();
 
@@ -323,6 +343,9 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             nome: insertedData?.nome || nome.trim(),
             telefone: insertedData?.telefone || phoneFormatted,
             altura_cm: alturaNum,
+            peso: peso && !isNaN(Number(peso)) ? Number(peso) : (insertedData?.peso ? Number(insertedData.peso) : undefined),
+            genero: genero || insertedData?.genero || undefined,
+            observacoes: observacoes.trim() || insertedData?.observacoes || undefined,
             objetivo: insertedData?.objetivo || objetivo,
             plano,
             frequencia_semanal: frequenciaSemanal,
@@ -341,6 +364,9 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             nome: nome.trim(),
             telefone: phoneFormatted,
             altura_cm: alturaNum,
+            peso: peso && !isNaN(Number(peso)) ? Number(peso) : undefined,
+            genero: genero || undefined,
+            observacoes: observacoes.trim() || undefined,
             objetivo,
             plano,
             frequencia_semanal: frequenciaSemanal,
@@ -359,6 +385,9 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
               data_nascimento: dataNascimento,
               avatar_url: avatarUrl.trim() || null,
             };
+            if (peso && !isNaN(Number(peso))) updatePayload.peso = Number(peso);
+            if (genero) updatePayload.genero = genero;
+            if (observacoes.trim()) updatePayload.observacoes = observacoes.trim();
 
             let { error: updateError } = await supabase
               .from('alunos')
@@ -366,11 +395,17 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
               .eq('id', alunoToEdit.id)
               .eq('profissional_id', currentUserId);
 
-            if (updateError && (updateError.message?.includes("'altura'") || updateError.message?.includes('schema cache'))) {
-              const { altura, ...updateWithoutAltura } = updatePayload;
+            if (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache'))) {
+              const safeUpdate = {
+                nome: nome.trim(),
+                telefone: phoneFormatted,
+                objetivo,
+                status,
+                avatar_url: avatarUrl.trim() || null,
+              };
               const retryUpdate = await supabase
                 .from('alunos')
-                .update(updateWithoutAltura)
+                .update(safeUpdate)
                 .eq('id', alunoToEdit.id)
                 .eq('profissional_id', currentUserId);
               updateError = retryUpdate.error;
@@ -743,6 +778,77 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
                   className="w-full rounded-xl border border-emerald-500/30 bg-[#02130e] pl-9 pr-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Peso Atual e Gênero */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-200">
+                  Peso Atual (kg)
+                </label>
+                <span className="text-[10px] text-slate-400">Opcional</span>
+              </div>
+              <div className="relative">
+                <Weight className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-400" />
+                <input
+                  type="number"
+                  step="0.1"
+                  value={peso}
+                  onChange={(e) => setPeso(e.target.value)}
+                  placeholder="Ex: 75.5"
+                  className="w-full rounded-xl border border-emerald-500/30 bg-[#02130e] pl-9 pr-10 py-2 text-sm text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-emerald-400">
+                  kg
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-200">
+                  Gênero
+                </label>
+                <span className="text-[10px] text-slate-400">Opcional</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['Masculino', 'Feminino', 'Outro'] as const).map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setGenero(g)}
+                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                      genero === g
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 shadow-sm'
+                        : 'bg-[#02130e] text-slate-400 border-emerald-500/15 hover:border-emerald-500/30'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Observações / Metas Clínicas */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-200">
+                Observações Clínicas / Restrições
+              </label>
+              <span className="text-[10px] text-slate-400">Opcional</span>
+            </div>
+            <div className="relative">
+              <FileText className="absolute left-3 top-3 h-4 w-4 text-emerald-400" />
+              <textarea
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Ex: Histórico de lesão no ombro, prefere treinar pela manhã..."
+                rows={2}
+                className="w-full rounded-xl border border-emerald-500/30 bg-[#02130e] pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none resize-none"
+              />
             </div>
           </div>
 

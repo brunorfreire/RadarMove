@@ -31,7 +31,10 @@ CREATE TABLE IF NOT EXISTS public.alunos (
     nome VARCHAR(150) NOT NULL,
     telefone VARCHAR(25) NOT NULL,
     altura NUMERIC, -- Altura do aluno em cm ou metros
+    peso NUMERIC,   -- Peso atual em kg
+    genero TEXT,    -- Gênero (masculino, feminino, outro)
     data_nascimento DATE,
+    observacoes TEXT, -- Observações clínicas e metas adicionais
     status VARCHAR(20) DEFAULT 'ativo' CHECK (status IN ('ativo', 'inativo', 'em_risco')),
     ultimo_checkin TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()),
     avatar_url TEXT,
@@ -40,11 +43,18 @@ CREATE TABLE IF NOT EXISTS public.alunos (
     updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Adiciona a coluna 'altura' à tabela de alunos se ela não existir (Migration retrocompatível)
+-- Adiciona a coluna 'altura' à tabela de alunos se ela não existir
 ALTER TABLE public.alunos 
 ADD COLUMN IF NOT EXISTS altura NUMERIC;
 
--- Recarrega o cache de schema da API do Supabase PostgREST
+-- Adiciona a coluna data_nascimento e outras colunas habituais caso ainda não existam
+ALTER TABLE public.alunos 
+ADD COLUMN IF NOT EXISTS data_nascimento DATE,
+ADD COLUMN IF NOT EXISTS peso NUMERIC,
+ADD COLUMN IF NOT EXISTS genero TEXT,
+ADD COLUMN IF NOT EXISTS observacoes TEXT;
+
+-- Atualiza a cache do esquema da API do Supabase imediatamente
 NOTIFY pgrst, 'reload config';
 
 COMMENT ON TABLE public.alunos IS 'Alunos matriculados sob a tutela do personal trainer';

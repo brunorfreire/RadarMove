@@ -34,6 +34,9 @@ export interface Aluno {
   plano: string;
   frequencia_semanal: number;
   altura_cm?: number; // cm (ex: 175)
+  peso?: number; // kg (ex: 78.5)
+  genero?: string; // ex: 'Masculino' | 'Feminino' | 'Outro'
+  observacoes?: string;
 }
 
 export interface AvaliacaoFisica {

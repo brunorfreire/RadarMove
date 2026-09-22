@@ -158,6 +158,9 @@ export default function App() {
           plano: a.plano || 'Presencial',
           frequencia_semanal: a.frequencia_semanal || 3,
           altura_cm: a.altura !== undefined && a.altura !== null ? Number(a.altura) : (a.altura_cm ? Number(a.altura_cm) : 175),
+          peso: a.peso !== undefined && a.peso !== null ? Number(a.peso) : undefined,
+          genero: a.genero || undefined,
+          observacoes: a.observacoes || undefined,
         }));
 
         setAlunos(alunosList);
@@ -335,12 +338,21 @@ export default function App() {
         };
         if (novoAluno.avatar_url) payload.avatar_url = novoAluno.avatar_url;
         if (novoAluno.data_nascimento) payload.data_nascimento = novoAluno.data_nascimento;
+        if (novoAluno.peso !== undefined && novoAluno.peso !== null) payload.peso = Number(novoAluno.peso);
+        if (novoAluno.genero) payload.genero = novoAluno.genero;
+        if (novoAluno.observacoes) payload.observacoes = novoAluno.observacoes;
 
         let { data, error } = await supabase.from('alunos').insert([payload]).select().maybeSingle();
 
-        if (error && (error.message?.includes("'altura'") || error.message?.includes('schema cache'))) {
-          const { altura, ...payloadWithoutAltura } = payload;
-          const retry = await supabase.from('alunos').insert([payloadWithoutAltura]).select().maybeSingle();
+        if (error && (error.message?.includes('column') || error.message?.includes('schema cache'))) {
+          const safePayload = {
+            nome: novoAluno.nome,
+            telefone: novoAluno.telefone,
+            objetivo: novoAluno.objetivo,
+            status: novoAluno.status || 'ativo',
+            profissional_id: currentUserId,
+          };
+          const retry = await supabase.from('alunos').insert([safePayload]).select().maybeSingle();
           data = retry.data;
           error = retry.error;
         }
@@ -371,6 +383,9 @@ export default function App() {
         };
         if (alunoAtualizado.avatar_url) updatePayload.avatar_url = alunoAtualizado.avatar_url;
         if (alunoAtualizado.data_nascimento) updatePayload.data_nascimento = alunoAtualizado.data_nascimento;
+        if (alunoAtualizado.peso !== undefined && alunoAtualizado.peso !== null) updatePayload.peso = Number(alunoAtualizado.peso);
+        if (alunoAtualizado.genero) updatePayload.genero = alunoAtualizado.genero;
+        if (alunoAtualizado.observacoes) updatePayload.observacoes = alunoAtualizado.observacoes;
 
         let { error: updateError } = await supabase
           .from('alunos')
@@ -378,11 +393,16 @@ export default function App() {
           .eq('id', alunoAtualizado.id)
           .eq('profissional_id', session.user.id);
 
-        if (updateError && (updateError.message?.includes("'altura'") || updateError.message?.includes('schema cache'))) {
-          const { altura, ...updateWithoutAltura } = updatePayload;
+        if (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache'))) {
+          const safeUpdate = {
+            nome: alunoAtualizado.nome,
+            telefone: alunoAtualizado.telefone,
+            status: alunoAtualizado.status,
+            objetivo: alunoAtualizado.objetivo,
+          };
           await supabase
             .from('alunos')
-            .update(updateWithoutAltura)
+            .update(safeUpdate)
             .eq('id', alunoAtualizado.id)
             .eq('profissional_id', session.user.id);
         }
