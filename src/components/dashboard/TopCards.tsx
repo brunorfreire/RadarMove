@@ -41,13 +41,15 @@ export const TopCards: React.FC<TopCardsProps> = ({
           </div>
           <div className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-400 border border-emerald-500/25">
             <ArrowUpRight className="h-3 w-3" />
-            +3 este mês
+            {totalAlunos > 0 ? `${totalAlunos} ativos` : '0 ativos'}
           </div>
         </div>
 
         <div className="mt-3 pt-3 border-t border-emerald-500/10 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Frequência semanal média:</span>
-          <span className="font-semibold text-slate-200">3.2x / semana</span>
+          <span>Status da carteira:</span>
+          <span className="font-semibold text-slate-200">
+            {totalAlunos > 0 ? `${totalAlunos - alunosEmRisco} engajados` : 'Sem alunos ainda'}
+          </span>
         </div>
       </div>
 
@@ -70,17 +72,19 @@ export const TopCards: React.FC<TopCardsProps> = ({
             <span className="text-3xl font-extrabold text-white tracking-tight">
               {desafiosEnviados}
             </span>
-            <span className="text-xs text-slate-400 ml-2">este mês</span>
+            <span className="text-xs text-slate-400 ml-2">disparados</span>
           </div>
           <div className="flex items-center gap-1 rounded-full bg-cyan-400/15 px-2 py-0.5 text-xs font-bold text-cyan-300 border border-cyan-400/25">
             <CheckCircle2 className="h-3 w-3" />
-            89% resposta
+            {desafiosEnviados > 0 ? 'WhatsApp ativo' : 'Aguardando envio'}
           </div>
         </div>
 
         <div className="mt-3 pt-3 border-t border-emerald-500/10 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Hoje pelo WhatsApp:</span>
-          <span className="font-semibold text-cyan-300">18 micro-desafios</span>
+          <span>Engajamento via WhatsApp:</span>
+          <span className="font-semibold text-cyan-300">
+            {desafiosEnviados > 0 ? `${desafiosEnviados} micro-desafios` : '0 micro-desafios'}
+          </span>
         </div>
       </div>
 
@@ -135,12 +139,12 @@ export const TopCards: React.FC<TopCardsProps> = ({
         <div className="mt-3 flex items-baseline justify-between">
           <div>
             <span className="text-3xl font-extrabold text-emerald-400 tracking-tight">
-              {taxaRetencao}%
+              {totalAlunos > 0 ? `${taxaRetencao}%` : '100%'}
             </span>
             <span className="text-xs text-slate-400 ml-2">últimos 90 dias</span>
           </div>
           <div className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-300 border border-emerald-500/25">
-            0 cancelamentos
+            {alunosEmRisco === 0 ? '0 em risco' : `${alunosEmRisco} em risco`}
           </div>
         </div>
 

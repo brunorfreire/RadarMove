@@ -105,8 +105,6 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
     setIsEditModalOpen(true);
   };
 
-  const activeAluno = selectedAluno || alunos[0];
-
   // Filter students for the selector strip
   const filteredAlunos = alunos.filter((a) => {
     const matchesSearch = a.nome.toLowerCase().includes(searchTerm.toLowerCase());
@@ -120,8 +118,10 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
     return matchesSearch && matchesStatus;
   });
 
+  const activeAluno = selectedAluno || (filteredAlunos.length > 0 ? filteredAlunos[0] : null);
+
   // Assessments belonging to the selected student
-  const alunoAvaliacoes = avaliacoes.filter((av) => av.aluno_id === activeAluno.id);
+  const alunoAvaliacoes = activeAluno ? avaliacoes.filter((av) => av.aluno_id === activeAluno.id) : [];
 
   // Latest assessment
   const sortedAvaliacoes = [...alunoAvaliacoes].sort(
@@ -276,7 +276,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
           </button>
 
           {filteredAlunos.map((a) => {
-            const isSelected = a.id === activeAluno.id;
+            const isSelected = activeAluno ? a.id === activeAluno.id : false;
             const aBadges = calcularBadgesDoAluno(a, avaliacoes.filter((av) => av.aluno_id === a.id));
 
             return (
@@ -492,14 +492,22 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
           )}
         </>
       ) : (
-        <div className="rounded-2xl border border-emerald-500/20 bg-[#032019] p-8 text-center">
-          <p className="text-slate-300 font-semibold mb-3">Nenhum aluno encontrado.</p>
+        <div className="rounded-2xl border border-dashed border-emerald-500/30 bg-[#032019]/90 p-12 text-center shadow-xl">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mb-4">
+            <Users className="h-7 w-7" />
+          </div>
+          <h3 className="text-base font-bold text-white mb-1.5">
+            Nenhum aluno registado ainda
+          </h3>
+          <p className="text-sm text-slate-400 max-w-md mx-auto mb-6">
+            Comece por adicionar o seu primeiro aluno! Você poderá acompanhar fotos de evolução, bioimpedância e programar desafios automáticos via WhatsApp.
+          </p>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 px-4 py-2 text-xs font-bold text-slate-950"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-5 py-3 text-sm font-extrabold text-slate-950 shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
           >
             <UserPlus className="h-4 w-4" />
-            Cadastrar Primeiro Aluno
+            Adicionar Primeiro Aluno
           </button>
         </div>
       )}

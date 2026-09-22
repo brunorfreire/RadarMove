@@ -108,8 +108,32 @@ export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownPr
   }, [])
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    window.location.href = '/login'
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {
+      console.error('Erro ao sair:', e)
+    }
+
+    // Limpar quaisquer dados de sessão, simulação e perfil em cache
+    try {
+      localStorage.removeItem('radarmove_perfil_treinador')
+      sessionStorage.clear()
+      // Limpa dados de auth do Supabase em localStorage
+      const keysToRemove: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+          keysToRemove.push(key)
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k))
+    } catch (err) {
+      // ignore
+    }
+
+    // Redireciona para o login de forma limpa
+    window.location.hash = '#login'
+    window.location.reload()
   }
 
   const handleOpenProfileModal = () => {

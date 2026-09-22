@@ -75,7 +75,16 @@ export const WhatsAppFeed: React.FC<WhatsAppFeedProps> = ({
 
       {/* Messages List */}
       <div className="flex-1 p-3.5 space-y-3 overflow-y-auto max-h-[580px]">
-        {mensagens.map((msg) => {
+        {mensagens.length === 0 ? (
+          <div className="py-12 px-4 text-center rounded-2xl border border-dashed border-emerald-500/20 bg-[#021510]/50 my-auto">
+            <MessageSquare className="mx-auto h-8 w-8 text-emerald-400/60 mb-2" />
+            <h4 className="text-xs font-bold text-white">Nenhuma mensagem recente</h4>
+            <p className="text-[11px] text-slate-400 mt-1 max-w-[200px] mx-auto">
+              As respostas aos micro-desafios e interações no WhatsApp aparecerão aqui em tempo real.
+            </p>
+          </div>
+        ) : (
+          mensagens.map((msg) => {
           const targetAluno = alunos.find((a) => a.id === msg.aluno_id);
           const isPersonal = msg.origem === 'personal';
           const isReplying = replyingToId === msg.id;
@@ -175,7 +184,8 @@ export const WhatsAppFeed: React.FC<WhatsAppFeedProps> = ({
               )}
             </div>
           );
-        })}
+        })
+      )}
       </div>
 
       {/* Footer Info */}

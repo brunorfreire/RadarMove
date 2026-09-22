@@ -75,3 +75,36 @@ export async function signup(prevState: AuthState | null, formData: FormData): P
     success: 'Conta criada com sucesso! Verifique seu e-mail para confirmação ou faça login.' 
   }
 }
+
+/**
+ * Server Action para iniciar o fluxo OAuth com o Google.
+ */
+export async function signInWithGoogle(): Promise<{ url?: string; error?: string }> {
+  const supabase = await createClient()
+
+  // Prioriza a URL pública do ambiente ou localhost em dev
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${siteUrl}/auth/callback`,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
+    },
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  if (data?.url) {
+    redirect(data.url)
+  }
+
+  return { error: 'Não foi possível gerar a URL de autenticação com o Google.' }
+}
+
