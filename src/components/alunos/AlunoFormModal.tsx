@@ -404,37 +404,58 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             insertPayload.foto_url = avatarUrl.trim();
           }
 
+          // Inserção no Supabase com resiliência total a divergências de schema cache
+          let currentPayload: Record<string, any> = { ...insertPayload };
           let { data: insertedData, error: insertError } = await supabase
             .from('alunos')
-            .insert([insertPayload])
+            .insert([currentPayload])
             .select()
-            .single();
+            .maybeSingle();
 
-          // Se alguma coluna ainda não foi criada no Supabase (cache de schema desatualizado ou migration pendente)
-          if (insertError && (insertError.message?.includes('column') || insertError.message?.includes('schema cache'))) {
-            console.warn("Coluna não encontrada no cache do Supabase. Executando fallback seguro...", insertError.message);
-            const safePayload: Record<string, any> = {
-              nome: nome.trim(),
-              telefone: phoneFormatted,
-              altura: alturaNum ? Number(alturaNum) : null,
-              objetivo: finalObjetivoStr,
-              status: 'ativo',
-              profissional_id: profissionalId,
-            };
-            if (!insertError.message?.includes('objetivos')) {
-              safePayload.objetivos = finalObjetivos;
+          let attempts = 0;
+          while (insertError && (insertError.message?.includes('column') || insertError.message?.includes('schema cache')) && attempts < 10) {
+            attempts++;
+            const colMatch = insertError.message.match(/['"]([a-zA-Z0-9_]+)['"]\s*column/i) ||
+                             insertError.message.match(/column\s*['"]([a-zA-Z0-9_]+)['"]/i) ||
+                             insertError.message.match(/find the ['"]([a-zA-Z0-9_]+)['"]/i);
+
+            if (colMatch && colMatch[1] && colMatch[1] in currentPayload) {
+              console.warn(`[Supabase Fallback] Coluna '${colMatch[1]}' não encontrada no schema cache. Removendo do payload.`);
+              delete currentPayload[colMatch[1]];
+            } else {
+              const optionalKeys = ['altura', 'objetivos', 'peso', 'genero', 'observacoes', 'data_nascimento', 'foto_url', 'avatar_url', 'plano', 'status', 'objetivo'];
+              const keyToDrop = optionalKeys.find((k) => k in currentPayload);
+              if (keyToDrop) {
+                console.warn(`[Supabase Fallback] Removendo campo opcional '${keyToDrop}' para compatibilidade.`);
+                delete currentPayload[keyToDrop];
+              } else {
+                break;
+              }
             }
+
             const retryResult = await supabase
               .from('alunos')
-              .insert([safePayload])
+              .insert([currentPayload])
               .select()
-              .single();
+              .maybeSingle();
 
-            if (!retryResult.error) {
-              insertedData = retryResult.data;
+            insertedData = retryResult.data;
+            insertError = retryResult.error;
+          }
+
+          // Fallback final: apenas colunas fundamentais garantidas
+          if (insertError && (insertError.message?.includes('column') || insertError.message?.includes('schema cache'))) {
+            const minimalPayload = {
+              nome: nome.trim(),
+              telefone: phoneFormatted,
+              profissional_id: profissionalId,
+            };
+            const minRetry = await supabase.from('alunos').insert([minimalPayload]).select().maybeSingle();
+            if (!minRetry.error) {
+              insertedData = minRetry.data;
               insertError = null;
             } else {
-              insertError = retryResult.error;
+              insertError = minRetry.error;
             }
           }
 
@@ -505,30 +526,52 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             if (genero) updatePayload.genero = genero;
             if (observacoes.trim()) updatePayload.observacoes = observacoes.trim();
 
+            let currentUpdate: Record<string, any> = { ...updatePayload };
             let { error: updateError } = await supabase
               .from('alunos')
-              .update(updatePayload)
+              .update(currentUpdate)
               .eq('id', alunoToEdit.id)
               .eq('profissional_id', currentUserId);
 
-            if (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache'))) {
-              const safeUpdate: Record<string, any> = {
-                nome: nome.trim(),
-                telefone: phoneFormatted,
-                altura: alturaNum ? Number(alturaNum) : null,
-                objetivo: finalObjetivoStr,
-                status,
-                avatar_url: avatarUrl.trim() || null,
-              };
-              if (!updateError.message?.includes('objetivos')) {
-                safeUpdate.objetivos = finalObjetivos;
+            let updateAttempts = 0;
+            while (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache')) && updateAttempts < 10) {
+              updateAttempts++;
+              const colMatch = updateError.message.match(/['"]([a-zA-Z0-9_]+)['"]\s*column/i) ||
+                               updateError.message.match(/column\s*['"]([a-zA-Z0-9_]+)['"]/i) ||
+                               updateError.message.match(/find the ['"]([a-zA-Z0-9_]+)['"]/i);
+
+              if (colMatch && colMatch[1] && colMatch[1] in currentUpdate) {
+                console.warn(`[Supabase Update Fallback] Removendo coluna '${colMatch[1]}' do update.`);
+                delete currentUpdate[colMatch[1]];
+              } else {
+                const optionalKeys = ['altura', 'objetivos', 'peso', 'genero', 'observacoes', 'data_nascimento', 'foto_url', 'avatar_url', 'plano', 'status', 'objetivo'];
+                const keyToDrop = optionalKeys.find((k) => k in currentUpdate);
+                if (keyToDrop) {
+                  delete currentUpdate[keyToDrop];
+                } else {
+                  break;
+                }
               }
+
               const retryUpdate = await supabase
                 .from('alunos')
-                .update(safeUpdate)
+                .update(currentUpdate)
                 .eq('id', alunoToEdit.id)
                 .eq('profissional_id', currentUserId);
               updateError = retryUpdate.error;
+            }
+
+            if (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache'))) {
+              const minimalUpdate = {
+                nome: nome.trim(),
+                telefone: phoneFormatted,
+              };
+              const minRetry = await supabase
+                .from('alunos')
+                .update(minimalUpdate)
+                .eq('id', alunoToEdit.id)
+                .eq('profissional_id', currentUserId);
+              updateError = minRetry.error;
             }
 
             if (updateError) {

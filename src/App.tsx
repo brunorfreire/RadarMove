@@ -262,10 +262,39 @@ export default function App() {
         if (alunoComUser.avatar_url) payload.avatar_url = alunoComUser.avatar_url;
         if (alunoComUser.data_nascimento) payload.data_nascimento = alunoComUser.data_nascimento;
 
-        let { error } = await supabase.from('alunos').insert([payload]);
-        if (error && (error.message?.includes("'altura'") || error.message?.includes('schema cache'))) {
-          const { altura, ...payloadWithoutAltura } = payload;
-          await supabase.from('alunos').insert([payloadWithoutAltura]);
+        let currentPayload: Record<string, any> = { ...payload };
+        let { error } = await supabase.from('alunos').insert([currentPayload]);
+
+        let attempts = 0;
+        while (error && (error.message?.includes('column') || error.message?.includes('schema cache')) && attempts < 8) {
+          attempts++;
+          const colMatch = error.message.match(/['"]([a-zA-Z0-9_]+)['"]\s*column/i) ||
+                           error.message.match(/column\s*['"]([a-zA-Z0-9_]+)['"]/i) ||
+                           error.message.match(/find the ['"]([a-zA-Z0-9_]+)['"]/i);
+
+          if (colMatch && colMatch[1] && colMatch[1] in currentPayload) {
+            delete currentPayload[colMatch[1]];
+          } else {
+            const optionalKeys = ['altura', 'objetivos', 'peso', 'genero', 'observacoes', 'data_nascimento', 'foto_url', 'avatar_url', 'plano', 'status', 'objetivo'];
+            const keyToDrop = optionalKeys.find((k) => k in currentPayload);
+            if (keyToDrop) {
+              delete currentPayload[keyToDrop];
+            } else {
+              break;
+            }
+          }
+
+          const retry = await supabase.from('alunos').insert([currentPayload]);
+          error = retry.error;
+        }
+
+        if (error && (error.message?.includes('column') || error.message?.includes('schema cache'))) {
+          const minimalPayload = {
+            profissional_id: session.user.id,
+            nome: alunoComUser.nome,
+            telefone: alunoComUser.telefone,
+          };
+          await supabase.from('alunos').insert([minimalPayload]);
         }
       } catch (err) {
         console.error('Erro ao persistir novo aluno no Supabase:', err);
@@ -360,23 +389,42 @@ export default function App() {
         if (novoAluno.genero) payload.genero = novoAluno.genero;
         if (novoAluno.observacoes) payload.observacoes = novoAluno.observacoes;
 
-        let { data, error } = await supabase.from('alunos').insert([payload]).select().maybeSingle();
+        let currentPayload: Record<string, any> = { ...payload };
+        let { data, error } = await supabase.from('alunos').insert([currentPayload]).select().maybeSingle();
 
-        if (error && (error.message?.includes('column') || error.message?.includes('schema cache'))) {
-          const safePayload: Record<string, any> = {
-            nome: novoAluno.nome,
-            telefone: novoAluno.telefone,
-            altura: novoAluno.altura_cm ? Number(novoAluno.altura_cm) : null,
-            objetivo: novoAluno.objetivo || objArray.join(', '),
-            status: novoAluno.status || 'ativo',
-            profissional_id: currentUserId,
-          };
-          if (!error.message?.includes('objetivos')) {
-            safePayload.objetivos = objArray;
+        let attempts = 0;
+        while (error && (error.message?.includes('column') || error.message?.includes('schema cache')) && attempts < 10) {
+          attempts++;
+          const colMatch = error.message.match(/['"]([a-zA-Z0-9_]+)['"]\s*column/i) ||
+                           error.message.match(/column\s*['"]([a-zA-Z0-9_]+)['"]/i) ||
+                           error.message.match(/find the ['"]([a-zA-Z0-9_]+)['"]/i);
+
+          if (colMatch && colMatch[1] && colMatch[1] in currentPayload) {
+            delete currentPayload[colMatch[1]];
+          } else {
+            const optionalKeys = ['altura', 'objetivos', 'peso', 'genero', 'observacoes', 'data_nascimento', 'foto_url', 'avatar_url', 'plano', 'status', 'objetivo'];
+            const keyToDrop = optionalKeys.find((k) => k in currentPayload);
+            if (keyToDrop) {
+              delete currentPayload[keyToDrop];
+            } else {
+              break;
+            }
           }
-          const retry = await supabase.from('alunos').insert([safePayload]).select().maybeSingle();
+
+          const retry = await supabase.from('alunos').insert([currentPayload]).select().maybeSingle();
           data = retry.data;
           error = retry.error;
+        }
+
+        if (error && (error.message?.includes('column') || error.message?.includes('schema cache'))) {
+          const minimalPayload = {
+            nome: novoAluno.nome,
+            telefone: novoAluno.telefone,
+            profissional_id: currentUserId,
+          };
+          const minRetry = await supabase.from('alunos').insert([minimalPayload]).select().maybeSingle();
+          data = minRetry.data;
+          error = minRetry.error;
         }
 
         if (error) {
@@ -415,18 +463,44 @@ export default function App() {
         if (alunoAtualizado.genero) updatePayload.genero = alunoAtualizado.genero;
         if (alunoAtualizado.observacoes) updatePayload.observacoes = alunoAtualizado.observacoes;
 
+        let currentUpdate: Record<string, any> = { ...updatePayload };
         let { error: updateError } = await supabase
           .from('alunos')
-          .update(updatePayload)
+          .update(currentUpdate)
           .eq('id', alunoAtualizado.id)
           .eq('profissional_id', session.user.id);
+
+        let updateAttempts = 0;
+        while (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache')) && updateAttempts < 10) {
+          updateAttempts++;
+          const colMatch = updateError.message.match(/['"]([a-zA-Z0-9_]+)['"]\s*column/i) ||
+                           updateError.message.match(/column\s*['"]([a-zA-Z0-9_]+)['"]/i) ||
+                           updateError.message.match(/find the ['"]([a-zA-Z0-9_]+)['"]/i);
+
+          if (colMatch && colMatch[1] && colMatch[1] in currentUpdate) {
+            delete currentUpdate[colMatch[1]];
+          } else {
+            const optionalKeys = ['altura', 'objetivos', 'peso', 'genero', 'observacoes', 'data_nascimento', 'foto_url', 'avatar_url', 'plano', 'status', 'objetivo'];
+            const keyToDrop = optionalKeys.find((k) => k in currentUpdate);
+            if (keyToDrop) {
+              delete currentUpdate[keyToDrop];
+            } else {
+              break;
+            }
+          }
+
+          const retryUpdate = await supabase
+            .from('alunos')
+            .update(currentUpdate)
+            .eq('id', alunoAtualizado.id)
+            .eq('profissional_id', session.user.id);
+          updateError = retryUpdate.error;
+        }
 
         if (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache'))) {
           const safeUpdate = {
             nome: alunoAtualizado.nome,
             telefone: alunoAtualizado.telefone,
-            status: alunoAtualizado.status,
-            objetivo: alunoAtualizado.objetivo || objArray.join(', '),
           };
           await supabase
             .from('alunos')
