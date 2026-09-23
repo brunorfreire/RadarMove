@@ -458,6 +458,12 @@ export default function App() {
     }
   };
 
+  const handleAddMultiplosAlunos = (novos: Aluno[]) => {
+    if (!novos || novos.length === 0) return;
+    setAlunos((prev) => [...novos, ...prev]);
+    setSelectedAluno(novos[0]);
+  };
+
   const handleUpdateAluno = async (alunoAtualizado: Aluno) => {
     setAlunos((prev) => prev.map((a) => (a.id === alunoAtualizado.id ? alunoAtualizado : a)));
     setSelectedAluno((prev) => (prev?.id === alunoAtualizado.id ? alunoAtualizado : prev));
@@ -834,6 +840,7 @@ export default function App() {
               selectedAluno={selectedAluno}
               onSelectAluno={setSelectedAluno}
               onAddAluno={handleAddAluno}
+              onAddMultiplosAlunos={handleAddMultiplosAlunos}
               onUpdateAluno={handleUpdateAluno}
               onUpdateAvatar={handleUpdateAvatar}
               fotos={fotosEvolucao}

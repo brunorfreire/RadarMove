@@ -10,6 +10,7 @@ import { SendChallengeModal } from '../dashboard/SendChallengeModal';
 import { AgendamentoModal } from '../desafios/AgendamentoModal';
 import { AgendamentosWhatsAppSection } from './AgendamentosWhatsAppSection';
 import { AgendamentoWhatsAppModal } from './AgendamentoWhatsAppModal';
+import { ImportarMultiplosContatosModal } from './ImportarMultiplosContatosModal';
 import { Aluno, AvaliacaoFisica, DesafioTemplate, RadarAlerta, FotoEvolucao, DesafioEnviado } from '../../types';
 import { calcularBadgesDoAluno } from '../../lib/badges';
 import { 
@@ -32,7 +33,8 @@ import {
   LineChart,
   Layers,
   History,
-  Bot
+  Bot,
+  Smartphone
 } from 'lucide-react';
 
 interface AlunosViewProps {
@@ -40,6 +42,7 @@ interface AlunosViewProps {
   selectedAluno: Aluno | null;
   onSelectAluno: (aluno: Aluno) => void;
   onAddAluno?: (aluno: Omit<Aluno, 'id'> | Aluno) => void;
+  onAddMultiplosAlunos?: (novos: Aluno[]) => void;
   onUpdateAluno?: (aluno: Aluno) => void;
   onUpdateAvatar?: (alunoId: string, newAvatarUrl: string) => void;
   fotos: FotoEvolucao[];
@@ -60,6 +63,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
   selectedAluno,
   onSelectAluno,
   onAddAluno,
+  onAddMultiplosAlunos,
   onUpdateAluno,
   onUpdateAvatar,
   fotos,
@@ -85,9 +89,38 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
   const [alunoToEdit, setAlunoToEdit] = useState<Aluno | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Estados para Importação Múltipla de Contatos da Agenda
+  const [contatosImportados, setContatosImportados] = useState<any[]>([]);
+  const [modalConfirmacaoAberto, setModalConfirmacaoAberto] = useState(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleImportarMultiplosContatos = async () => {
+    if (!('contacts' in navigator && 'ContactsManager' in window)) {
+      alert('A importação direta da agenda está disponível em navegadores móveis suportados (como o Chrome no smartphone).');
+      return;
+    }
+
+    try {
+      const supportedProperties = await (navigator as any).contacts.getProperties();
+      const props = [];
+      if (supportedProperties.includes('name')) props.push('name');
+      if (supportedProperties.includes('tel')) props.push('tel');
+
+      // multiple: true permite selecionar múltiplos contatos de uma vez
+      const contatos = await (navigator as any).contacts.select(props, { multiple: true });
+
+      if (contatos && contatos.length > 0) {
+        // Abre modal de confirmação com a prévia dos contatos selecionados
+        setContatosImportados(contatos);
+        setModalConfirmacaoAberto(true);
+      }
+    } catch (error: any) {
+      console.error('Seleção de contatos cancelada ou falhou:', error);
+    }
   };
 
   const handleSaveCreate = (novoData: Omit<Aluno, 'id'> | Aluno) => {
@@ -193,6 +226,18 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
             >
               <UserPlus className="h-4 w-4" />
               <span>Adicionar Cliente</span>
+            </button>
+
+            {/* BOTÃO IMPORTAÇÃO MÚLTIPLA DE CONTATOS DA AGENDA */}
+            <button
+              id="btn-importar-multiplos-contatos"
+              type="button"
+              onClick={handleImportarMultiplosContatos}
+              className="flex items-center gap-1.5 rounded-xl border border-cyan-400/40 bg-gradient-to-r from-cyan-950/80 to-emerald-950/80 hover:from-cyan-900 hover:to-emerald-900 text-cyan-300 px-3.5 py-1.5 text-xs font-bold shadow-md shadow-cyan-950/40 hover:brightness-110 active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+              title="Importar múltiplos contatos diretamente da agenda do celular"
+            >
+              <Smartphone className="h-4 w-4 text-cyan-400" />
+              <span>Importar Vários Contatos 📱✨</span>
             </button>
           </div>
 
@@ -601,6 +646,27 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
         mode="edit"
         alunoToEdit={alunoToEdit}
         onSave={handleSaveEdit}
+      />
+
+      {/* Modal de Confirmação e Prévia da Importação Múltipla de Contatos */}
+      <ImportarMultiplosContatosModal
+        isOpen={modalConfirmacaoAberto}
+        onClose={() => {
+          setModalConfirmacaoAberto(false);
+          setContatosImportados([]);
+        }}
+        rawContacts={contatosImportados}
+        alunosExistentes={alunos}
+        onImportSuccess={(novosAlunos) => {
+          if (onAddMultiplosAlunos) {
+            onAddMultiplosAlunos(novosAlunos);
+          } else if (onAddAluno) {
+            novosAlunos.forEach((aluno) => onAddAluno(aluno));
+          }
+          showToast(`${novosAlunos.length} novos alunos importados com sucesso!`);
+          setModalConfirmacaoAberto(false);
+          setContatosImportados([]);
+        }}
       />
     </div>
   );
