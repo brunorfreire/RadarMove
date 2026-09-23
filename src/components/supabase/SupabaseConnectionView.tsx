@@ -179,6 +179,10 @@ VITE_SUPABASE_ANON_KEY="sua-chave-anon-publica"`;
                   <span className="text-emerald-300">/supabase/seed_desafios_nativos.sql</span>
                   <span className="text-slate-500">10 Desafios Globais</span>
                 </div>
+                <div className="flex items-center justify-between p-2 rounded-lg bg-[#02140f] border border-emerald-500/15">
+                  <span className="text-teal-300">/supabase/seed_templates_complementares_14.sql</span>
+                  <span className="text-slate-500">14 Cards por Categoria</span>
+                </div>
               </div>
             </div>
 
