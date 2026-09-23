@@ -7,8 +7,11 @@ export type CategoriaDesafio =
   | 'Desafio de Bolso'
   | 'Estoicismo'
   | 'Recuperação'
+  | 'Recuperação & Sono'
   | 'Nutrição'
-  | 'Desafio de Conversão';
+  | 'Nutrição & Hidratação'
+  | 'Desafio de Conversão'
+  | 'Conversão & Leads';
 
 export interface Profissional {
   id: string;
@@ -38,6 +41,7 @@ export interface Aluno {
   peso?: number; // kg (ex: 78.5)
   genero?: string; // ex: 'Masculino' | 'Feminino' | 'Outro'
   observacoes?: string;
+  created_at?: string; // ISO string de criação no Supabase
 }
 
 export interface AvaliacaoFisica {
@@ -182,5 +186,32 @@ export interface Lead {
   valor_estimado_plano?: number; // R$
   notas?: string;
   historico_interacoes: LeadInteracao[];
+}
+
+export type AgendamentoStatus = 'pendente' | 'processando' | 'enviado' | 'falha';
+
+export interface AgendamentoWhatsApp {
+  id: string;
+  profissional_id: string;
+  aluno_id: string;
+  telefone: string;
+  mensagem: string;
+  data_hora_envio: string; // TIMESTAMPTZ ISO string
+  status: AgendamentoStatus;
+  tentativas: number;
+  erro_log?: string | null;
+  created_at: string;
+  // Campos auxiliares para exibição na UI
+  aluno_nome?: string;
+  aluno_avatar?: string;
+}
+
+export interface WhatsAppGatewayConfig {
+  provedor: 'automatico' | 'evolution_api' | 'zapi' | 'meta_cloud' | 'custom_webhook';
+  apiUrl?: string;
+  apiKey?: string;
+  instancia?: string;
+  ativo: boolean;
+  modo_simulacao?: boolean;
 }
 

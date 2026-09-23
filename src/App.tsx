@@ -172,6 +172,7 @@ export default function App() {
             peso: a.peso !== undefined && a.peso !== null ? Number(a.peso) : undefined,
             genero: a.genero || undefined,
             observacoes: a.observacoes || undefined,
+            created_at: a.created_at || undefined,
           };
         });
 
@@ -199,7 +200,26 @@ export default function App() {
           .order('categoria', { ascending: true });
 
         if (templatesData && templatesData.length > 0) {
-          setTemplates(templatesData);
+          const dbTemplates: DesafioTemplate[] = templatesData.map((t: any) => ({
+            id: t.id,
+            profissional_id: t.profissional_id,
+            categoria: t.categoria,
+            titulo: t.titulo,
+            mensagem_whatsapp: t.mensagem_whatsapp || t.mensagem || '',
+            tempo_estimado: t.tempo_estimado || '5 min',
+            dificuldade: t.dificuldade || 'Fácil',
+          }));
+
+          // Adiciona templates nativos se alguma categoria ainda não estiver presente no banco
+          const existingTitles = new Set(dbTemplates.map((t) => t.titulo.toLowerCase().trim()));
+          const missingNatives: DesafioTemplate[] = DESAFIOS_NATIVOS_RADARMOVE
+            .filter((t) => !existingTitles.has(t.titulo.toLowerCase().trim()))
+            .map((t, idx) => ({
+              ...t,
+              id: `seed-native-${idx + 1}`,
+            }));
+
+          setTemplates([...dbTemplates, ...missingNatives]);
         } else {
           // Usa os templates nativos do sistema se o banco ainda não os tiver populado
           const defaultTemplates: DesafioTemplate[] = DESAFIOS_NATIVOS_RADARMOVE.map((t, idx) => ({

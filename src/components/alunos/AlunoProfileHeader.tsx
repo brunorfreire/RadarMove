@@ -16,7 +16,8 @@ import {
   Ruler,
   Edit3,
   Camera,
-  Upload
+  Upload,
+  Bot
 } from 'lucide-react';
 import { Aluno, AvaliacaoFisica } from '../../types';
 import { openWhatsApp } from '../../lib/whatsappUtils';
@@ -27,6 +28,7 @@ interface AlunoProfileHeaderProps {
   avaliacoes: AvaliacaoFisica[];
   onOpenVoiceModal: (aluno: Aluno) => void;
   onOpenChallengeModal: (aluno: Aluno) => void;
+  onOpenAgendamentoWhatsApp?: (aluno: Aluno) => void;
   onSendWhatsAppCelebration?: (texto: string) => void;
   onEditAluno?: (aluno: Aluno) => void;
   onUpdateAvatar?: (alunoId: string, newAvatarUrl: string) => void;
@@ -37,6 +39,7 @@ export const AlunoProfileHeader: React.FC<AlunoProfileHeaderProps> = ({
   avaliacoes,
   onOpenVoiceModal,
   onOpenChallengeModal,
+  onOpenAgendamentoWhatsApp,
   onSendWhatsAppCelebration,
   onEditAluno,
   onUpdateAvatar,
@@ -228,6 +231,20 @@ export const AlunoProfileHeader: React.FC<AlunoProfileHeaderProps> = ({
             <Mic className="h-4 w-4 text-cyan-400" />
             <span>Gravar Áudio</span>
           </button>
+
+          {/* Agendar WhatsApp no Piloto Automático */}
+          {onOpenAgendamentoWhatsApp && (
+            <button
+              id="btn-profile-agendar-whatsapp"
+              type="button"
+              onClick={() => onOpenAgendamentoWhatsApp(aluno)}
+              className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-[#021813] px-3.5 py-2.5 text-xs font-bold text-emerald-300 hover:bg-[#03241c] hover:border-emerald-400/50 active:scale-95 transition-all shadow-sm cursor-pointer"
+              title="Agendar envio automático de WhatsApp pelo servidor (piloto automático)"
+            >
+              <Bot className="h-4 w-4 text-emerald-400" />
+              <span>Agendar WhatsApp</span>
+            </button>
+          )}
 
           {/* Enviar WhatsApp Direct */}
           <button

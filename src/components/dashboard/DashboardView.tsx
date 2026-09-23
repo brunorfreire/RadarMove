@@ -168,6 +168,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         desafiosEnviados={contagemDesafiosEnviados}
         alunosEmRisco={alunosEmRiscoCount}
         taxaRetencao={taxaRetencaoCalculada}
+        alunos={alunos}
       />
 
       {/* 2. GRID PRINCIPAL: Central Radar + Right WhatsApp Feed */}

@@ -397,3 +397,165 @@ VALUES
         'Fácil'
     )
 ON CONFLICT DO NOTHING;
+
+-- Garante compatibilidade caso o cliente use 'mensagem' ou 'mensagem_whatsapp'
+ALTER TABLE public.desafios_templates ADD COLUMN IF NOT EXISTS mensagem TEXT;
+ALTER TABLE public.desafios_templates ALTER COLUMN mensagem_whatsapp DROP NOT NULL;
+
+-- Atualiza restrição de categoria para suportar nomes curtos e descritivos das abas
+ALTER TABLE public.desafios_templates DROP CONSTRAINT IF EXISTS desafios_templates_categoria_check;
+ALTER TABLE public.desafios_templates ADD CONSTRAINT desafios_templates_categoria_check 
+CHECK (categoria IN (
+    'Lazer Ativo', 
+    'Mindset Estoico', 
+    'Estoicismo', 
+    'Lifestyle 23h', 
+    'Desafio de Bolso', 
+    'Recuperação', 
+    'Recuperação & Sono', 
+    'Nutrição', 
+    'Nutrição & Hidratação', 
+    'Desafio de Conversão', 
+    'Conversão & Leads'
+));
+
+-- Sincroniza colunas de mensagem
+UPDATE public.desafios_templates SET mensagem = mensagem_whatsapp WHERE mensagem IS NULL;
+UPDATE public.desafios_templates SET mensagem_whatsapp = mensagem WHERE mensagem_whatsapp IS NULL;
+
+-- Inserção dos 10 Desafios Práticos Globais (profissional_id = NULL)
+INSERT INTO public.desafios_templates (titulo, categoria, mensagem, mensagem_whatsapp, profissional_id, tempo_estimado, dificuldade)
+VALUES
+  -- 1. Lifestyle 23h
+  (
+    'Despertar Hídrico Sem Celular',
+    'Lifestyle 23h',
+    'Bom dia! Seu desafio matinal das 23h fora da academia: antes de checar mensagens ou redes sociais, beba 500ml de água em temperatura ambiente e tome 5 minutos de luz solar natural na janela ou varanda. Mande um ''Feito ☀️'' quando cumprir!',
+    'Bom dia! Seu desafio matinal das 23h fora da academia: antes de checar mensagens ou redes sociais, beba 500ml de água em temperatura ambiente e tome 5 minutos de luz solar natural na janela ou varanda. Mande um ''Feito ☀️'' quando cumprir!',
+    NULL,
+    '5 min',
+    'Fácil'
+  ),
+  (
+    'Meta 8.000 Passos no Asfalto',
+    'Lifestyle 23h',
+    'Hoje o foco é não passar o dia sentado. Seu desafio RadarMove é atingir no mínimo 8.000 passos até o fim da noite. Vale descer um ponto antes, usar escadas ou fazer uma caminhada leve após o almoço. Mostre o print do contador no final do dia!',
+    'Hoje o foco é não passar o dia sentado. Seu desafio RadarMove é atingir no mínimo 8.000 passos até o fim da noite. Vale descer um ponto antes, usar escadas ou fazer uma caminhada leve após o almoço. Mostre o print do contador no final do dia!',
+    NULL,
+    'Ao longo do dia',
+    'Médio'
+  ),
+
+  -- 2. Desafio de Bolso
+  (
+    'Reset de 3 Minutos na Cadeira',
+    'Desafio de Bolso',
+    'Trabalhando direto sem pausa? Pare agora por 3 minutos: faça 10 rotações de ombros, 10 extensões torácicas apoiado na cadeira e 1 minuto de cócoras para destravar o quadril e a lombar. O corpo agradece e o foco volta dobrado!',
+    'Trabalhando direto sem pausa? Pare agora por 3 minutos: faça 10 rotações de ombros, 10 extensões torácicas apoiado na cadeira e 1 minuto de cócoras para destravar o quadril e a lombar. O corpo agradece e o foco volta dobrado!',
+    NULL,
+    '3 min',
+    'Fácil'
+  ),
+  (
+    'Mini-HIIT Anti-Cancelamento (12 Min)',
+    'Desafio de Bolso',
+    'Sem tempo para vir ao treino hoje? O treino não está perdido! Faça este circuito em casa: 4 rounds de 30s de polichinelos, 30s de agachamento livre, 30s de prancha isométrica e 30s de descanso. 12 minutos e está pago. Me avise quando terminar!',
+    'Sem tempo para vir ao treino hoje? O treino não está perdido! Faça este circuito em casa: 4 rounds de 30s de polichinelos, 30s de agachamento livre, 30s de prancha isométrica e 30s de descanso. 12 minutos e está pago. Me avise quando terminar!',
+    NULL,
+    '12 min',
+    'Médio'
+  ),
+
+  -- 3. Conversão & Leads (Desafio de Conversão)
+  (
+    'Degustação: Desafio Detox Postural (Dia 1)',
+    'Desafio de Conversão',
+    'Olá! Preparado para começar seu Desafio Postural de 3 Dias? Seu compromisso hoje leva apenas 2 minutos: faça o alinhamento escapular na parede que gravei no vídeo curto abaixo. Faça agora e me diga se sentiu a tensão aliviar na parte alta das costas!',
+    'Olá! Preparado para começar seu Desafio Postural de 3 Dias? Seu compromisso hoje leva apenas 2 minutos: faça o alinhamento escapular na parede que gravei no vídeo curto abaixo. Faça agora e me diga se sentiu a tensão aliviar na parte alta das costas!',
+    NULL,
+    '2 min',
+    'Fácil'
+  ),
+  (
+    'Degustação: Teste de Mobilidade de Quadril',
+    'Desafio de Conversão',
+    'Tudo bem? Como prometido, aqui está seu mini-teste de mobilidade. Faça o teste de agachamento profundo segurando no batente da porta e repare se seu calcanhar levanta do chão. Me responde aqui com ''Levantou'' ou ''Ficou no chão'' para eu avaliar seu padrão!',
+    'Tudo bem? Como prometido, aqui está seu mini-teste de mobilidade. Faça o teste de agachamento profundo segurando no batente da porta e repare se seu calcanhar levanta do chão. Me responde aqui com ''Levantou'' ou ''Ficou no chão'' para eu avaliar seu padrão!',
+    NULL,
+    '3 min',
+    'Fácil'
+  ),
+
+  -- 4. Nutrição & Hidratação
+  (
+    'Proteína no Primeiro Prato',
+    'Nutrição',
+    'Meta nutricional simples para hoje: garanta que sua primeira refeição do dia contenha uma porção sólida de proteína (ovos, iogurte desnatado, frango ou whey). Nada de começar o dia apenas com carboidratos simples. Mande a foto do prato!',
+    'Meta nutricional simples para hoje: garanta que sua primeira refeição do dia contenha uma porção sólida de proteína (ovos, iogurte desnatado, frango ou whey). Nada de começar o dia apenas com carboidratos simples. Mande a foto do prato!',
+    NULL,
+    'Primeira refeição',
+    'Fácil'
+  ),
+  (
+    'Zero Açúcar Líquido por 24h',
+    'Nutrição',
+    'Desafio de corte estratégico: nas próximas 24 horas, você está proibido de consumir açúcar líquido (refrigerantes comuns, sucos de caixinha, café com açúcar refinado ou energéticos doces). Troque por água, café preto ou chá sem açúcar. Topa o teste?',
+    'Desafio de corte estratégico: nas próximas 24 horas, você está proibido de consumir açúcar líquido (refrigerantes comuns, sucos de caixinha, café com açúcar refinado ou energéticos doces). Troque por água, café preto ou chá sem açúcar. Topa o teste?',
+    NULL,
+    '24h',
+    'Médio'
+  ),
+
+  -- 5. Recuperação & Sono
+  (
+    'Higiene de Sono & Tela Azul Off',
+    'Recuperação',
+    'O músculo cresce e a gordura é queimada no descanso profundo. Desafio desta noite: desligue telas (celular, TV e notebook) 45 minutos antes de deitar e mantenha o quarto completamente escuro e fresco. Uma noite de sono impecável para amanhã render mais!',
+    'O músculo cresce e a gordura é queimada no descanso profundo. Desafio desta noite: desligue telas (celular, TV e notebook) 45 minutos antes de deitar e mantenha o quarto completamente escuro e fresco. Uma noite de sono impecável para amanhã render mais!',
+    NULL,
+    '45 min antes de dormir',
+    'Fácil'
+  ),
+  (
+    'Descompressão Lombar Noturna',
+    'Recuperação',
+    'Antes de deitar, dedique 4 minutos para a sua coluna: abrace os dois joelhos deitado de costas por 1 minuto, faça 1 minuto de postura da criança (alongamento de glúteos e dorsais) e finalize com respiração diafragmática lenta. Deite e descanse!',
+    'Antes de deitar, dedique 4 minutos para a sua coluna: abrace os dois joelhos deitado de costas por 1 minuto, faça 1 minuto de postura da criança (alongamento de glúteos e dorsais) e finalize com respiração diafragmática lenta. Deite e descanse!',
+    NULL,
+    '4 min',
+    'Fácil'
+  )
+ON CONFLICT DO NOTHING;
+
+-- ==============================================================================
+-- 7. TABELA: agendamentos_whatsapp (Envio no Piloto Automático pelo Servidor)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.agendamentos_whatsapp (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  profissional_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  aluno_id UUID REFERENCES public.alunos(id) ON DELETE CASCADE,
+  telefone TEXT NOT NULL,
+  mensagem TEXT NOT NULL,
+  data_hora_envio TIMESTAMPTZ NOT NULL,
+  status TEXT DEFAULT 'pendente' CHECK (status IN ('pendente', 'processando', 'enviado', 'falha')),
+  tentativas INT DEFAULT 0,
+  erro_log TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índice de alta performance para a fila do cron / worker do servidor
+CREATE INDEX IF NOT EXISTS idx_agendamentos_whatsapp_queue 
+ON public.agendamentos_whatsapp (status, data_hora_envio);
+
+-- Habilitar RLS
+ALTER TABLE public.agendamentos_whatsapp ENABLE ROW LEVEL SECURITY;
+
+-- Política RLS para controle total pelo treinador autenticado
+DROP POLICY IF EXISTS "Treinador gerencia seus agendamentos" ON public.agendamentos_whatsapp;
+CREATE POLICY "Treinador gerencia seus agendamentos"
+ON public.agendamentos_whatsapp
+FOR ALL
+USING (auth.uid() = profissional_id);
+
+-- Recarrega cache de esquemas do PostgREST
+NOTIFY pgrst, 'reload config';

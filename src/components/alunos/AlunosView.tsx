@@ -8,6 +8,8 @@ import { EvolucaoFotosSection } from './EvolucaoFotosSection';
 import { HistoricoDesafiosAluno } from './HistoricoDesafiosAluno';
 import { SendChallengeModal } from '../dashboard/SendChallengeModal';
 import { AgendamentoModal } from '../desafios/AgendamentoModal';
+import { AgendamentosWhatsAppSection } from './AgendamentosWhatsAppSection';
+import { AgendamentoWhatsAppModal } from './AgendamentoWhatsAppModal';
 import { Aluno, AvaliacaoFisica, DesafioTemplate, RadarAlerta, FotoEvolucao, DesafioEnviado } from '../../types';
 import { calcularBadgesDoAluno } from '../../lib/badges';
 import { 
@@ -29,7 +31,8 @@ import {
   Camera,
   LineChart,
   Layers,
-  History
+  History,
+  Bot
 } from 'lucide-react';
 
 interface AlunosViewProps {
@@ -73,9 +76,10 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'ativo' | 'em_risco' | 'badges'>('todos');
-  const [mainSectionTab, setMainSectionTab] = useState<'fotos' | 'bioimpedancia' | 'desafios' | 'tudo'>('fotos');
+  const [mainSectionTab, setMainSectionTab] = useState<'fotos' | 'bioimpedancia' | 'desafios' | 'agendamentos' | 'tudo'>('fotos');
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [isAgendamentoModalOpen, setIsAgendamentoModalOpen] = useState(false);
+  const [isWhatsAppScheduleModalOpen, setIsWhatsAppScheduleModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [alunoToEdit, setAlunoToEdit] = useState<Aluno | null>(null);
@@ -337,6 +341,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
             avaliacoes={alunoAvaliacoes}
             onOpenVoiceModal={onOpenVoiceModalForAluno}
             onOpenChallengeModal={() => setIsChallengeModalOpen(true)}
+            onOpenAgendamentoWhatsApp={() => setIsWhatsAppScheduleModalOpen(true)}
             onEditAluno={handleOpenEdit}
             onUpdateAvatar={onUpdateAvatar}
             onSendWhatsAppCelebration={(texto) => {
@@ -348,12 +353,12 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
 
           {/* Section Navigation Switcher */}
           <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
-            <div className="flex items-center gap-2 p-1 rounded-2xl bg-[#02140f] border border-emerald-500/20">
+            <div className="flex items-center gap-2 p-1 rounded-2xl bg-[#02140f] border border-emerald-500/20 overflow-x-auto max-w-full">
               <button
                 type="button"
                 id="tab-fotos-evolucao"
                 onClick={() => setMainSectionTab('fotos')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
                   mainSectionTab === 'fotos'
                     ? 'bg-gradient-to-r from-emerald-500 to-cyan-400 text-slate-950 shadow-md shadow-emerald-500/20'
                     : 'text-slate-400 hover:text-white'
@@ -374,7 +379,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
                 type="button"
                 id="tab-bioimpedancia"
                 onClick={() => setMainSectionTab('bioimpedancia')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
                   mainSectionTab === 'bioimpedancia'
                     ? 'bg-gradient-to-r from-emerald-500 to-cyan-400 text-slate-950 shadow-md shadow-emerald-500/20'
                     : 'text-slate-400 hover:text-white'
@@ -395,7 +400,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
                 type="button"
                 id="tab-historico-desafios"
                 onClick={() => setMainSectionTab('desafios')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
                   mainSectionTab === 'desafios'
                     ? 'bg-gradient-to-r from-emerald-500 to-cyan-400 text-slate-950 shadow-md shadow-emerald-500/20'
                     : 'text-slate-400 hover:text-white'
@@ -414,9 +419,27 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
 
               <button
                 type="button"
+                id="tab-agendamentos-whatsapp"
+                onClick={() => setMainSectionTab('agendamentos')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                  mainSectionTab === 'agendamentos'
+                    ? 'bg-gradient-to-r from-emerald-500 to-cyan-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Bot className="h-4 w-4 text-emerald-400" />
+                <span>WhatsApp Automático</span>
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-extrabold text-emerald-300 border border-emerald-500/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Piloto Auto
+                </span>
+              </button>
+
+              <button
+                type="button"
                 id="tab-visao-completa"
                 onClick={() => setMainSectionTab('tudo')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
                   mainSectionTab === 'tudo'
                     ? 'bg-gradient-to-r from-emerald-500 to-cyan-400 text-slate-950 shadow-md shadow-emerald-500/20'
                     : 'text-slate-400 hover:text-white'
@@ -490,6 +513,15 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
               onReenviarDesafio={onReenviarDesafio}
             />
           )}
+
+          {/* Section 4: WhatsApp Scheduled Automated Messaging */}
+          {(mainSectionTab === 'agendamentos' || mainSectionTab === 'tudo') && (
+            <AgendamentosWhatsAppSection
+              aluno={activeAluno}
+              alunosList={alunos}
+              onOpenAgendarModal={() => setIsWhatsAppScheduleModalOpen(true)}
+            />
+          )}
         </>
       ) : (
         <div className="rounded-2xl border border-dashed border-emerald-500/30 bg-[#032019]/90 p-12 text-center shadow-xl">
@@ -529,7 +561,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
         />
       )}
 
-      {/* Modal para Agendar Envio Programado */}
+      {/* Modal para Agendar Envio Programado (Legado/Desafios) */}
       <AgendamentoModal
         isOpen={isAgendamentoModalOpen}
         onClose={() => setIsAgendamentoModalOpen(false)}
@@ -540,6 +572,19 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
           showToast(`Desafio programado com sucesso para ${activeAluno?.nome.split(' ')[0]}!`);
         }}
       />
+
+      {/* Modal de Agendamento Automático de WhatsApp pelo Servidor */}
+      {activeAluno && (
+        <AgendamentoWhatsAppModal
+          isOpen={isWhatsAppScheduleModalOpen}
+          onClose={() => setIsWhatsAppScheduleModalOpen(false)}
+          aluno={activeAluno}
+          alunosList={alunos}
+          onAgendamentoCriado={(item) => {
+            showToast(`Mensagem agendada no piloto automático para ${item.aluno_nome || activeAluno.nome}!`);
+          }}
+        />
+      )}
 
       {/* Modal para Adicionar Novo Aluno (Simples, Fácil e Rápido) */}
       <AlunoFormModal

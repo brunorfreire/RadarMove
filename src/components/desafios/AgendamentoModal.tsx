@@ -21,6 +21,7 @@ import {
 import { Aluno, DesafioTemplate } from '../../types'
 import { supabase } from '../../lib/supabaseClient'
 import { formatPhoneDisplay } from '../../lib/whatsappUtils'
+import { criarAgendamentoWhatsApp } from '../../lib/agendamentoWhatsAppService'
 
 interface AgendamentoModalProps {
   isOpen: boolean
@@ -156,37 +157,40 @@ export const AgendamentoModal: React.FC<AgendamentoModalProps> = ({
         throw new Error('A data e hora do agendamento deve ser pelo menos 1 minuto no futuro.')
       }
 
-      // Obtém usuário autenticado
-      const { data: authData } = await supabase.auth.getUser()
-      const userId = authData?.user?.id || 'guest-trainer-demo'
-
-      const novoAgendamento = {
-        profissional_id: userId,
+      // Grava no sistema de agendamento automático de WhatsApp (tabela agendamentos_whatsapp e worker do servidor)
+      const agendamentoItem = await criarAgendamentoWhatsApp({
         aluno_id: selectedAluno.id,
+        aluno_nome: selectedAluno.nome,
+        telefone: selectedAluno.telefone,
         mensagem: mensagem.trim(),
-        data_hora_programada: dataHoraProgramada.toISOString(),
-        status: 'pendente',
-        notificar_treinador: notificarTreinador,
-        created_at: new Date().toISOString(),
-      }
+        data_hora_envio: dataHoraProgramada.toISOString(),
+      });
 
-      // Tenta gravar na tabela agendamentos_envios
-      const { data: insertedData, error: insertError } = await supabase
-        .from('agendamentos_envios')
-        .insert([novoAgendamento])
-        .select()
-        .maybeSingle()
-
-      if (insertError) {
-        console.warn('Nota: Erro de banco de dados no Supabase, mantendo registro localmente:', insertError)
+      // Tenta gravar também na tabela agendamentos_envios para retrocompatibilidade
+      try {
+        const { data: authData } = await supabase.auth.getUser()
+        const userId = authData?.user?.id || 'guest-trainer-demo'
+        await supabase
+          .from('agendamentos_envios')
+          .insert([{
+            profissional_id: userId,
+            aluno_id: selectedAluno.id,
+            mensagem: mensagem.trim(),
+            data_hora_programada: dataHoraProgramada.toISOString(),
+            status: 'pendente',
+            notificar_treinador: notificarTreinador,
+            created_at: new Date().toISOString(),
+          }]);
+      } catch (e) {
+        // ignore
       }
 
       setSuccessMessage(
-        `Desafio agendado com sucesso para ${selectedAluno.nome.split(' ')[0]} em ${dataHoraProgramada.toLocaleDateString('pt-BR')} às ${horaEnvio}!`
+        `Desafio agendado no piloto automático para ${selectedAluno.nome.split(' ')[0]} em ${dataHoraProgramada.toLocaleDateString('pt-BR')} às ${horaEnvio}! O servidor fará o disparo automático sem abrir WhatsApp Web.`
       )
 
       if (onAgendamentoCriado) {
-        onAgendamentoCriado(insertedData || novoAgendamento)
+        onAgendamentoCriado(agendamentoItem)
       }
 
       setTimeout(() => {

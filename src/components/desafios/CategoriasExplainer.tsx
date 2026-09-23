@@ -151,6 +151,12 @@ export const CategoriasExplainer: React.FC<CategoriasExplainerProps> = ({
           const isSelected = selectedCategoria === pilar.id;
           const count = pilar.id === 'Mindset Estoico'
             ? ((counts['Mindset Estoico'] || 0) + (counts['Estoicismo'] || 0))
+            : pilar.id === 'Desafio de Conversão'
+            ? ((counts['Desafio de Conversão'] || 0) + (counts['Conversão & Leads'] || 0))
+            : pilar.id === 'Nutrição'
+            ? ((counts['Nutrição'] || 0) + (counts['Nutrição & Hidratação'] || 0))
+            : pilar.id === 'Recuperação'
+            ? ((counts['Recuperação'] || 0) + (counts['Recuperação & Sono'] || 0))
             : (counts[pilar.id] || 0);
 
           return (

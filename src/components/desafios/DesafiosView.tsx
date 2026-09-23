@@ -77,7 +77,13 @@ export const DesafiosView: React.FC<DesafiosViewProps> = ({
     const matchesCategory = 
       selectedCategoria === 'Todos' || 
       item.categoria === selectedCategoria || 
-      (selectedCategoria === 'Mindset Estoico' && item.categoria === 'Estoicismo');
+      (selectedCategoria === 'Mindset Estoico' && item.categoria === 'Estoicismo') ||
+      (selectedCategoria === 'Desafio de Conversão' && item.categoria === 'Conversão & Leads') ||
+      (selectedCategoria === 'Conversão & Leads' && item.categoria === 'Desafio de Conversão') ||
+      (selectedCategoria === 'Nutrição' && item.categoria === 'Nutrição & Hidratação') ||
+      (selectedCategoria === 'Nutrição & Hidratação' && item.categoria === 'Nutrição') ||
+      (selectedCategoria === 'Recuperação' && item.categoria === 'Recuperação & Sono') ||
+      (selectedCategoria === 'Recuperação & Sono' && item.categoria === 'Recuperação');
     const matchesDificuldade = dificuldadeFilter === 'Todas' || item.dificuldade === dificuldadeFilter;
     const matchesSearch = 
       item.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||

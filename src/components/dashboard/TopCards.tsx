@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Users, Zap, AlertTriangle, TrendingUp, ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import { Aluno } from '../../types';
 
 interface TopCardsProps {
   totalAlunos: number;
   desafiosEnviados: number;
   alunosEmRisco: number;
   taxaRetencao: number;
+  alunos?: Aluno[];
   onFilterRisco?: () => void;
 }
 
@@ -14,8 +16,76 @@ export const TopCards: React.FC<TopCardsProps> = ({
   desafiosEnviados,
   alunosEmRisco,
   taxaRetencao,
+  alunos = [],
   onFilterRisco,
 }) => {
+  // Lógica real para cálculo de tempo médio de permanência e retenção
+  const { labelPermanencia, subtituloRetencao, taxaExibida } = useMemo(() => {
+    // Se não houver alunos cadastrados na carteira
+    if (!alunos || alunos.length === 0 || totalAlunos === 0) {
+      return {
+        labelPermanencia: 'Em início',
+        subtituloRetencao: 'Início da carteira',
+        taxaExibida: 100,
+      };
+    }
+
+    const alunosCancelados = alunos.filter((a) => a.status === 'inativo').length;
+    const isInicioOuZeroCancelados = alunosCancelados === 0;
+
+    // Subtítulo e Taxa de Retenção
+    let subRetencao = 'últimos 90 dias';
+    let taxaFinal = taxaRetencao;
+
+    if (alunos.length <= 2 && isInicioOuZeroCancelados) {
+      subRetencao = 'Início da carteira';
+      taxaFinal = 100;
+    } else if (isInicioOuZeroCancelados) {
+      taxaFinal = 100;
+    }
+
+    // Cálculo da permanência real com base em created_at
+    const now = new Date().getTime();
+    const permanenciaDiasArray: number[] = [];
+
+    alunos.forEach((aluno) => {
+      if (aluno.created_at) {
+        const criadoEm = new Date(aluno.created_at).getTime();
+        if (!isNaN(criadoEm) && criadoEm <= now) {
+          const diffDias = Math.max(0, (now - criadoEm) / (1000 * 60 * 60 * 24));
+          permanenciaDiasArray.push(diffDias);
+        }
+      }
+    });
+
+    // Se nenhum aluno tiver data de criação registrada
+    if (permanenciaDiasArray.length === 0) {
+      return {
+        labelPermanencia: 'Em início',
+        subtituloRetencao: subRetencao,
+        taxaExibida: taxaFinal,
+      };
+    }
+
+    const mediaDias = permanenciaDiasArray.reduce((acc, curr) => acc + curr, 0) / permanenciaDiasArray.length;
+    const mediaMeses = mediaDias / 30.4375; // média de dias no mês
+
+    let labelFinal = '';
+
+    if (mediaDias < 30 || alunos.length === 1 && mediaDias < 30) {
+      labelFinal = 'Base recente (< 1 mês)';
+    } else if (mediaMeses < 1) {
+      labelFinal = `${mediaDias.toFixed(0)} dias`;
+    } else {
+      labelFinal = `${mediaMeses.toFixed(1)} meses`;
+    }
+
+    return {
+      labelPermanencia: labelFinal,
+      subtituloRetencao: subRetencao,
+      taxaExibida: taxaFinal,
+    };
+  }, [alunos, totalAlunos, taxaRetencao]);
   return (
     <div id="dashboard-top-cards" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
       {/* Card 1: Alunos Ativos */}
@@ -139,9 +209,9 @@ export const TopCards: React.FC<TopCardsProps> = ({
         <div className="mt-3 flex items-baseline justify-between">
           <div>
             <span className="text-3xl font-extrabold text-emerald-400 tracking-tight">
-              {totalAlunos > 0 ? `${taxaRetencao}%` : '100%'}
+              {taxaExibida}%
             </span>
-            <span className="text-xs text-slate-400 ml-2">últimos 90 dias</span>
+            <span className="text-xs text-slate-400 ml-2">{subtituloRetencao}</span>
           </div>
           <div className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-300 border border-emerald-500/25">
             {alunosEmRisco === 0 ? '0 em risco' : `${alunosEmRisco} em risco`}
@@ -150,7 +220,7 @@ export const TopCards: React.FC<TopCardsProps> = ({
 
         <div className="mt-3 pt-3 border-t border-emerald-500/10 flex items-center justify-between text-[11px] text-slate-400">
           <span>Tempo médio de permanência:</span>
-          <span className="font-semibold text-slate-200">11.4 meses</span>
+          <span className="font-semibold text-slate-200">{labelPermanencia}</span>
         </div>
       </div>
     </div>
