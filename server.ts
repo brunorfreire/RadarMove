@@ -329,6 +329,53 @@ app.post('/api/whatsapp/schedule', (req: Request, res: Response) => {
   res.json({ success: true, item });
 });
 
+// PASSO 1: Rota tradicional /api/whatsapp (Route Handler / API Route)
+app.post('/api/whatsapp', async (req: Request, res: Response) => {
+  try {
+    const { number, text } = req.body || {};
+
+    const apiUrl = process.env.WHATSAPP_API_URL;
+    const apiToken = process.env.WHATSAPP_API_TOKEN;
+    const instance = process.env.WHATSAPP_INSTANCE;
+
+    if (!apiUrl || !apiToken || !instance) {
+      return res.status(500).json({ success: false, error: 'Credenciais de ambiente não configuradas.' });
+    }
+
+    let cleanNumber = String(number || '').replace(/\D/g, '');
+    if (cleanNumber.length === 10 || cleanNumber.length === 11) {
+      cleanNumber = '55' + cleanNumber;
+    }
+
+    const endpoint = `${apiUrl}/message/sendText/${instance}`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: apiToken,
+      },
+      body: JSON.stringify({
+        number: cleanNumber,
+        options: { delay: 1000, presence: 'composing' },
+        textMessage: { text },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status || 500).json({
+        success: false,
+        error: `Erro na VPS: ${response.status} - ${errorText}`,
+      });
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Endpoint dedicado para Server Action / envio direto sem CORS
 app.post('/api/whatsapp/send-message', async (req: Request, res: Response) => {
   const { number, text, message } = req.body;

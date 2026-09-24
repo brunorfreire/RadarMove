@@ -12,7 +12,6 @@ import {
   Info,
 } from 'lucide-react';
 import { formatPhoneDisplay } from '../../lib/whatsappUtils';
-import { sendWhatsAppMessage } from '../../actions/whatsapp';
 
 interface MensagemAvulsaModalProps {
   isOpen: boolean;
@@ -57,12 +56,12 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
 
   const cleanDigits = phone.replace(/\D/g, '');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // PASSO 2: Função de envio que chama a rota interna /api/whatsapp com proteção contra <!DOCTYPE
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setToast(null);
 
     const rawDigits = phone.replace(/\D/g, '');
-
     if (!rawDigits || rawDigits.length < 10) {
       setToast({
         type: 'error',
@@ -80,23 +79,29 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     }
 
     setIsLoading(true);
-
     try {
-      // Chamada da Server Action passando number e message
-      const result = await sendWhatsAppMessage(phone, message.trim());
+      const res = await fetch('/api/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: phone, text: message.trim() })
+      });
+      
+      // Proteção contra o erro <!DOCTYPE
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+         throw new Error("A rota falhou e não retornou JSON.");
+      }
 
-      // Se result.success for true, mostre o Toast de sucesso e feche o modal.
-      // Se for false, mostre o Toast de erro com result.error. NUNCA tente fazer res.json() no cliente.
-      if (result.success) {
+      const data = await res.json();
+      if (data.success) {
         setToast({
           type: 'success',
           text: 'Mensagem enviada com sucesso!',
         });
-
         if (onSuccess) {
           onSuccess({ phone, message: message.trim() });
         }
-
+        // Fechar modal e limpar campos
         setTimeout(() => {
           setPhone('');
           setMessage('');
@@ -106,14 +111,13 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
       } else {
         setToast({
           type: 'error',
-          text: result.error || 'Falha ao enviar mensagem.',
+          text: data.error || 'Falha ao enviar.',
         });
       }
-    } catch (err: any) {
-      console.error('[MensagemAvulsaModal] Erro ao invocar Server Action:', err);
+    } catch (error: any) {
       setToast({
         type: 'error',
-        text: err?.message || 'Erro inesperado ao processar o envio via Server Action.',
+        text: 'Erro fatal: ' + error.message,
       });
     } finally {
       setIsLoading(false);
@@ -166,7 +170,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
         </div>
 
         {/* Content Form */}
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 relative z-10">
+        <form onSubmit={handleSend} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 relative z-10">
           {/* Toast / Status Feedback Banner */}
           {toast && (
             <div
