@@ -12,6 +12,7 @@ import {
   Info,
 } from 'lucide-react';
 import { formatPhoneDisplay } from '../../lib/whatsappUtils';
+import { sendWhatsAppAction } from './actions';
 
 interface MensagemAvulsaModalProps {
   isOpen: boolean;
@@ -56,7 +57,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
 
   const cleanDigits = phone.replace(/\D/g, '');
 
-  // PASSO 2: Função de envio que chama a rota interna /api/whatsapp com proteção contra <!DOCTYPE
+  // 3. Atualize a função de submit (handleSend) para ser exatamente assim:
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setToast(null);
@@ -80,20 +81,9 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
 
     setIsLoading(true);
     try {
-      const res = await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: phone, text: message.trim() })
-      });
+      const result = await sendWhatsAppAction(phone, message.trim());
       
-      // Proteção contra o erro <!DOCTYPE
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-         throw new Error("A rota falhou e não retornou JSON.");
-      }
-
-      const data = await res.json();
-      if (data.success) {
+      if (result.success) {
         setToast({
           type: 'success',
           text: 'Mensagem enviada com sucesso!',
@@ -101,7 +91,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
         if (onSuccess) {
           onSuccess({ phone, message: message.trim() });
         }
-        // Fechar modal e limpar campos
+        // Feche o modal e limpe os campos aqui
         setTimeout(() => {
           setPhone('');
           setMessage('');
@@ -111,13 +101,13 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
       } else {
         setToast({
           type: 'error',
-          text: data.error || 'Falha ao enviar.',
+          text: result.error || 'Falha ao enviar.',
         });
       }
     } catch (error: any) {
       setToast({
         type: 'error',
-        text: 'Erro fatal: ' + error.message,
+        text: 'Erro ao executar ação: ' + error.message,
       });
     } finally {
       setIsLoading(false);
