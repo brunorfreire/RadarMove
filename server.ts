@@ -329,6 +329,59 @@ app.post('/api/whatsapp/schedule', (req: Request, res: Response) => {
   res.json({ success: true, item });
 });
 
+// Endpoint dedicado para Server Action / envio direto sem CORS
+app.post('/api/whatsapp/send-message', async (req: Request, res: Response) => {
+  const { number, text, message } = req.body;
+  const targetText = text || message;
+
+  if (!number || !targetText) {
+    return res.status(400).json({ success: false, error: 'Número e mensagem são obrigatórios.' });
+  }
+
+  try {
+    const apiUrl = process.env.WHATSAPP_API_URL;
+    const apiToken = process.env.WHATSAPP_API_TOKEN;
+    const instance = process.env.WHATSAPP_INSTANCE;
+
+    if (!apiUrl || !apiToken || !instance) {
+      return res.status(500).json({ success: false, error: 'Faltam credenciais no servidor.' });
+    }
+
+    let cleanNumber = String(number).replace(/\D/g, '');
+    if (cleanNumber.length === 10 || cleanNumber.length === 11) {
+      cleanNumber = '55' + cleanNumber;
+    }
+
+    const endpoint = `${apiUrl}/message/sendText/${instance}`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiToken,
+      },
+      body: JSON.stringify({
+        number: cleanNumber,
+        options: { delay: 1000, presence: 'composing' },
+        textMessage: { text: targetText },
+      }),
+    });
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      return res.status(response.status || 500).json({
+        success: false,
+        error: `Falha na Evolution API: ${response.status} - ${responseText}`,
+      });
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: `Erro interno: ${error.message}` });
+  }
+});
+
 // Disparar imediatamente pelo servidor (sem abrir web.whatsapp.com)
 app.post('/api/whatsapp/send', async (req: Request, res: Response) => {
   const { phone, message, telefone, mensagem, number, text } = req.body;

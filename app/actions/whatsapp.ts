@@ -1,8 +1,3 @@
 "use server";
 
-export { 
-  sendWhatsAppMessageAction, 
-  sendWhatsAppAction,
-  type SendWhatsAppResult, 
-  type SendWhatsAppParams 
-} from '../../src/actions/whatsapp';
+export { sendWhatsAppMessage } from '../../src/actions/whatsapp';

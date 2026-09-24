@@ -12,7 +12,7 @@ import {
   Info,
 } from 'lucide-react';
 import { formatPhoneDisplay } from '../../lib/whatsappUtils';
-import { sendWhatsAppAction } from '../../actions/whatsapp';
+import { sendWhatsAppMessage } from '../../actions/whatsapp';
 
 interface MensagemAvulsaModalProps {
   isOpen: boolean;
@@ -82,38 +82,33 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     setIsLoading(true);
 
     try {
-      // 1. Arquitetura (Server Action): O Modal não faz requisições HTTP diretas,
-      // ele chama exclusivamente a Server Action passando number e message.
-      const result = await sendWhatsAppAction({
-        number: phone,
-        message: message.trim(),
-      });
+      // Chamada da Server Action passando number e message
+      const result = await sendWhatsAppMessage(phone, message.trim());
 
-      // 4. Tratamento Seguro: exibe o objeto estruturado retornado { success, message }
-      if (!result.success) {
+      // Se result.success for true, mostre o Toast de sucesso e feche o modal.
+      // Se for false, mostre o Toast de erro com result.error. NUNCA tente fazer res.json() no cliente.
+      if (result.success) {
+        setToast({
+          type: 'success',
+          text: 'Mensagem enviada com sucesso!',
+        });
+
+        if (onSuccess) {
+          onSuccess({ phone, message: message.trim() });
+        }
+
+        setTimeout(() => {
+          setPhone('');
+          setMessage('');
+          setToast(null);
+          onClose();
+        }, 1500);
+      } else {
         setToast({
           type: 'error',
-          text: result.message || 'Falha ao enviar mensagem via Evolution API.',
+          text: result.error || 'Falha ao enviar mensagem.',
         });
-        return;
       }
-
-      setToast({
-        type: 'success',
-        text: result.message || 'Mensagem enviada com sucesso!',
-      });
-
-      if (onSuccess) {
-        onSuccess({ phone, message: message.trim() });
-      }
-
-      // Limpa formulário e fecha após breve intervalo para visualização do Toast
-      setTimeout(() => {
-        setPhone('');
-        setMessage('');
-        setToast(null);
-        onClose();
-      }, 1500);
     } catch (err: any) {
       console.error('[MensagemAvulsaModal] Erro ao invocar Server Action:', err);
       setToast({

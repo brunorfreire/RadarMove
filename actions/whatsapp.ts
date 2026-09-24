@@ -2,38 +2,6 @@
 
 export async function sendWhatsAppMessage(number: string, text: string) {
   try {
-    // No ambiente do navegador (Vite SPA), invoca a rota de servidor local para executar a chamada segura
-    if (typeof window !== "undefined") {
-      const res = await fetch("/api/whatsapp/send-message", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ number, text }),
-      });
-
-      const responseText = await res.text();
-      let data: any = null;
-      try {
-        data = JSON.parse(responseText);
-      } catch {
-        // Se a rota retornar HTML de erro (ex: 502/404)
-        return {
-          success: false,
-          error: `Falha na rota do servidor: ${res.status} - ${responseText.slice(0, 150)}`,
-        };
-      }
-
-      if (!res.ok || data?.success === false) {
-        return {
-          success: false,
-          error: data?.error || `Falha no envio (Status HTTP ${res.status})`,
-        };
-      }
-
-      return { success: true };
-    }
-
     const apiUrl = process.env.WHATSAPP_API_URL;
     const apiToken = process.env.WHATSAPP_API_TOKEN;
     const instance = process.env.WHATSAPP_INSTANCE;
