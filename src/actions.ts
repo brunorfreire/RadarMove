@@ -2,9 +2,9 @@
 
 export async function sendWhatsAppAction(number: string, text: string) {
   try {
-    const apiUrl = process.env.WHATSAPP_API_URL || "http://76.13.163.205:8080";
-    const apiToken = process.env.WHATSAPP_API_TOKEN || "RadarMoveSeguro2026!";
-    const instance = process.env.WHATSAPP_INSTANCE || "whatsapp_principal";
+    const apiUrl = process.env.WHATSAPP_API_URL;
+    const apiToken = process.env.WHATSAPP_API_TOKEN;
+    const instance = process.env.WHATSAPP_INSTANCE;
 
     if (!apiUrl || !apiToken || !instance) {
       console.warn("[Server Action] Faltam variáveis de ambiente (WHATSAPP_API_URL / TOKEN / INSTANCE)");

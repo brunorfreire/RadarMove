@@ -57,9 +57,12 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
 
   const cleanDigits = phone.replace(/\D/g, '');
 
-  // 3. Atualize a função de submit (handleSend) para ser exatamente assim:
-  const handleSend = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // 1. Previne recarregamento nativo de página que quebra o iframe
+  const handleSend = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setToast(null);
 
     const rawDigits = phone.replace(/\D/g, '');
@@ -295,8 +298,9 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
             </button>
 
             <button
-              type="submit"
+              type="button"
               id="btn-submeter-mensagem-avulsa"
+              onClick={handleSend}
               disabled={isLoading || !cleanDigits || !message.trim()}
               className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
