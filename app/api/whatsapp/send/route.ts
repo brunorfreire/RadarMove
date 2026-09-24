@@ -7,17 +7,19 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { phone, message } = body;
+    const { phone, message, number, text } = body;
+    const targetPhone = phone || number;
+    const targetMessage = message || text;
 
-    if (!phone || !message) {
+    if (!targetPhone || !targetMessage) {
       return NextResponse.json(
-        { error: 'Parâmetros "phone" e "message" são obrigatórios.' },
+        { error: 'Parâmetros "phone" (ou "number") e "message" (ou "text") são obrigatórios.' },
         { status: 400 }
       );
     }
 
     // Higienização dos dígitos do telefone
-    let cleanPhone = String(phone).replace(/\D/g, '');
+    let cleanPhone = String(targetPhone).replace(/\D/g, '');
     if (cleanPhone.length === 10 || cleanPhone.length === 11) {
       cleanPhone = `55${cleanPhone}`;
     }
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
           },
           body: JSON.stringify({
             number: cleanPhone,
-            text: message,
+            text: targetMessage,
             delay: 1200,
           }),
         });
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
           success: true,
           provider: 'evolution_api',
           messageId: data?.key?.id || `evo-${Date.now()}`,
-          message: 'Desafio enviado com sucesso via Evolution API!',
+          message: 'Mensagem enviada com sucesso via Evolution API!',
         });
       } catch (externalError: any) {
         console.error('[WhatsApp API] Erro na Evolution API:', externalError.message);
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
       simulated: true,
       messageId: `sim-${Date.now()}`,
       phone: cleanPhone,
-      message: 'Desafio enviado com sucesso!',
+      message: 'Mensagem enviada com sucesso!',
     });
   } catch (error: any) {
     console.error('[WhatsApp Route Error]', error);

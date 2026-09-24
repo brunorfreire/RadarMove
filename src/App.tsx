@@ -6,6 +6,7 @@ import { AlunosView } from './components/alunos/AlunosView';
 import { DesafiosView } from './components/desafios/DesafiosView';
 import { LeadsView } from './components/leads/LeadsView';
 import { QuickVoiceModal } from './components/audio/QuickVoiceModal';
+import { MensagemAvulsaModal } from './components/layout/MensagemAvulsaModal';
 import { SupabaseConnectionView } from './components/supabase/SupabaseConnectionView';
 import { AuthPage } from './components/auth/AuthPage';
 import { supabase } from './lib/supabaseClient';
@@ -29,6 +30,7 @@ export default function App() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'alunos' | 'desafios' | 'leads' | 'supabase'>('dashboard');
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isMensagemAvulsaOpen, setIsMensagemAvulsaOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Auth state
@@ -764,6 +766,7 @@ export default function App() {
           setCollapsed={setCollapsed}
           profissional={profissional}
           onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
+          onOpenMensagemAvulsa={() => setIsMensagemAvulsaOpen(true)}
           totalAlertas={alertas.length}
           totalLeadsPendentes={leads.filter(l => l.status === 'em_followup' || l.proximo_followup === 'Hoje').length}
         />
@@ -790,6 +793,10 @@ export default function App() {
                 setIsVoiceModalOpen(true);
                 setMobileSidebarOpen(false);
               }}
+              onOpenMensagemAvulsa={() => {
+                setIsMensagemAvulsaOpen(true);
+                setMobileSidebarOpen(false);
+              }}
               totalAlertas={alertas.length}
               totalLeadsPendentes={leads.filter(l => l.status === 'em_followup' || l.proximo_followup === 'Hoje').length}
             />
@@ -803,6 +810,7 @@ export default function App() {
         <Topbar
           onToggleMobileSidebar={() => setMobileSidebarOpen(true)}
           onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
+          onOpenMensagemAvulsa={() => setIsMensagemAvulsaOpen(true)}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           alunos={alunos}
@@ -889,6 +897,28 @@ export default function App() {
         alunos={alunos}
         selectedAlunoDefault={selectedAluno}
         onSaveVoiceNote={handleSaveVoiceNote}
+      />
+
+      {/* Mensagem Avulsa / Envio Rápido WhatsApp Modal */}
+      <MensagemAvulsaModal
+        isOpen={isMensagemAvulsaOpen}
+        onClose={() => setIsMensagemAvulsaOpen(false)}
+        onSuccess={({ phone, message }) => {
+          // Adiciona ao feed de WhatsApp para histórico visual imediato
+          setFeedWhatsApp((prev) => [
+            {
+              id: `avulsa-${Date.now()}`,
+              aluno_id: 'avulso',
+              aluno_nome: `Destinatário Avulso (+${phone})`,
+              texto: message,
+              origem: 'personal',
+              data_hora: 'Agora',
+              lida: true,
+              status_envio: 'enviado',
+            },
+            ...prev,
+          ]);
+        }}
       />
     </div>
   );

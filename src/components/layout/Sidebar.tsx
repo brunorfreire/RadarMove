@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   Zap,
   UserPlus,
-  Target
+  Target,
+  Send
 } from 'lucide-react';
 import { Profissional } from '../../types';
 import { UserProfileDropdown } from './UserProfileDropdown';
@@ -25,6 +26,7 @@ interface SidebarProps {
   setCollapsed: (collapsed: boolean) => void;
   profissional: Profissional;
   onOpenVoiceModal: () => void;
+  onOpenMensagemAvulsa?: () => void;
   totalAlertas: number;
   totalLeadsPendentes?: number;
 }
@@ -36,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setCollapsed,
   profissional,
   onOpenVoiceModal,
+  onOpenMensagemAvulsa,
   totalAlertas,
   totalLeadsPendentes = 4,
 }) => {
@@ -132,18 +135,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Quick Voice Dictation Trigger - Atende ao pedido do usuário de não ter que digitar */}
-        <div className="p-3">
+        {/* Quick Actions (Ditado de Áudio e Mensagem Avulsa) */}
+        <div className="p-3 space-y-2">
+          {/* Quick Voice Dictation Trigger */}
           <button
             id="sidebar-quick-voice-btn"
             onClick={onOpenVoiceModal}
-            className={`w-full group relative overflow-hidden rounded-xl border border-cyan-400/30 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-cyan-500/15 p-3 text-left transition-all hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-500/15 active:scale-98 ${
-              collapsed ? 'flex justify-center p-2.5' : ''
+            className={`w-full group relative overflow-hidden rounded-xl border border-cyan-400/30 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-cyan-500/15 p-2.5 text-left transition-all hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-500/15 active:scale-98 cursor-pointer ${
+              collapsed ? 'flex justify-center p-2' : ''
             }`}
           >
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-cyan-400 text-slate-950 shadow-md group-hover:scale-105 transition-transform">
-                <Mic className="h-5 w-5 fill-slate-950 animate-pulse" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-cyan-400 text-slate-950 shadow-md group-hover:scale-105 transition-transform">
+                <Mic className="h-4 w-4 fill-slate-950 animate-pulse" />
               </div>
               {!collapsed && (
                 <div className="flex-1 min-w-0">
@@ -152,16 +156,48 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       Gravar Áudio Rápido
                     </span>
                     <span className="rounded bg-cyan-400/20 px-1 py-0.2 text-[9px] font-bold text-cyan-300">
-                      NOVO
+                      VOZ
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 truncate">
+                  <p className="text-[10px] text-slate-400 truncate">
                     Ditado de recado p/ WhatsApp
                   </p>
                 </div>
               )}
             </div>
           </button>
+
+          {/* Quick Standalone Message / Mensagem Avulsa Trigger */}
+          {onOpenMensagemAvulsa && (
+            <button
+              id="sidebar-quick-mensagem-avulsa-btn"
+              onClick={onOpenMensagemAvulsa}
+              className={`w-full group relative overflow-hidden rounded-xl border border-emerald-500/30 bg-[#032019] p-2.5 text-left transition-all hover:border-emerald-400 hover:bg-[#04281f] hover:shadow-lg hover:shadow-emerald-500/10 active:scale-98 cursor-pointer ${
+                collapsed ? 'flex justify-center p-2' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 shadow-md group-hover:scale-105 transition-transform">
+                  <Send className="h-4 w-4 fill-slate-950 text-slate-950" />
+                </div>
+                {!collapsed && (
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-300 group-hover:text-white transition-colors">
+                        Mensagem Avulsa
+                      </span>
+                      <span className="rounded bg-emerald-500/20 px-1 py-0.2 text-[9px] font-bold text-emerald-300 border border-emerald-500/30">
+                        DIRETO
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      Envio sem cadastrar aluno
+                    </p>
+                  </div>
+                )}
+              </div>
+            </button>
+          )}
         </div>
 
         {/* Navigation List */}

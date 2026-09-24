@@ -9,7 +9,8 @@ import {
   AlertTriangle, 
   Sparkles,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Send
 } from 'lucide-react';
 import { Aluno, RadarAlerta } from '../../types';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -17,6 +18,7 @@ import { PWAInstallButton } from '../pwa/PWAInstallButton';
 interface TopbarProps {
   onToggleMobileSidebar: () => void;
   onOpenVoiceModal: () => void;
+  onOpenMensagemAvulsa?: () => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   alunos: Aluno[];
@@ -27,6 +29,7 @@ interface TopbarProps {
 export const Topbar: React.FC<TopbarProps> = ({
   onToggleMobileSidebar,
   onOpenVoiceModal,
+  onOpenMensagemAvulsa,
   searchQuery,
   setSearchQuery,
   alunos,
@@ -153,6 +156,21 @@ export const Topbar: React.FC<TopbarProps> = ({
             Falar
           </span>
         </button>
+
+        {/* Botão de Mensagem Avulsa / Envio Rápido */}
+        {onOpenMensagemAvulsa && (
+          <button
+            type="button"
+            id="topbar-mensagem-avulsa-btn"
+            onClick={onOpenMensagemAvulsa}
+            title="Enviar mensagem ou desafio avulso para qualquer WhatsApp"
+            className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-[#032019] px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-[#04281f] hover:border-cyan-400 hover:text-white active:scale-95 transition-all cursor-pointer shadow-sm"
+          >
+            <Send className="h-3.5 w-3.5 text-cyan-400 fill-cyan-400" />
+            <span className="hidden sm:inline">Mensagem Avulsa</span>
+            <span className="sm:hidden">Avulsa</span>
+          </button>
+        )}
 
         {/* WhatsApp Connection Pill */}
         <div

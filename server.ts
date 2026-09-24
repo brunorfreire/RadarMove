@@ -76,15 +76,19 @@ async function sendWhatsAppMessageDirect(
 
   console.log(`[WhatsApp Server Worker] Disparando mensagem no piloto automático para +${digits} (${alunoNome || 'Aluno'})...`);
 
-  // 1. Provedor: Evolution API
-  if (gatewayConfig.provedor === 'evolution_api' && gatewayConfig.apiUrl && gatewayConfig.apiKey) {
+  // 1. Provedor: Evolution API (prioritário se configurado ou se variáveis de ambiente estiverem presentes)
+  const evolutionApiUrl = gatewayConfig.apiUrl || process.env.WHATSAPP_API_URL;
+  const evolutionApiKey = gatewayConfig.apiKey || process.env.WHATSAPP_API_TOKEN || process.env.WHATSAPP_API_KEY;
+  const evolutionInstance = gatewayConfig.instancia || process.env.WHATSAPP_INSTANCE || 'default';
+
+  if (evolutionApiUrl) {
     try {
-      const url = `${gatewayConfig.apiUrl.replace(/\/$/, '')}/message/sendText/${gatewayConfig.instancia || 'default'}`;
+      const url = `${evolutionApiUrl.replace(/\/$/, '')}/message/sendText/${evolutionInstance}`;
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: gatewayConfig.apiKey,
+          ...(evolutionApiKey ? { apikey: evolutionApiKey } : {}),
         },
         body: JSON.stringify({
           number: digits,
@@ -93,7 +97,7 @@ async function sendWhatsAppMessageDirect(
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.message || 'Falha no envio via Evolution API');
+      if (!response.ok) throw new Error(data?.message || data?.error || 'Falha no envio via Evolution API');
       totalDisparosRealizados++;
       return { success: true, messageId: data?.key?.id || `evo-${Date.now()}` };
     } catch (err: any) {
@@ -316,21 +320,21 @@ app.post('/api/whatsapp/schedule', (req: Request, res: Response) => {
 
 // Disparar imediatamente pelo servidor (sem abrir web.whatsapp.com)
 app.post('/api/whatsapp/send', async (req: Request, res: Response) => {
-  const { phone, message, telefone, mensagem } = req.body;
-  const targetPhone = phone || telefone;
-  const targetMessage = message || mensagem;
+  const { phone, message, telefone, mensagem, number, text } = req.body;
+  const targetPhone = phone || telefone || number;
+  const targetMessage = message || mensagem || text;
 
   if (!targetPhone || !targetMessage) {
-    return res.status(400).json({ error: 'Parâmetros "phone" e "message" são obrigatórios.' });
+    return res.status(400).json({ error: 'Parâmetros "phone" / "number" e "message" / "text" são obrigatórios.' });
   }
 
   try {
     const result = await sendWhatsAppMessageDirect(targetPhone, targetMessage);
 
     if (result.success) {
-      res.json({
+      res.status(200).json({
         success: true,
-        message: 'Desafio enviado com sucesso!',
+        message: 'Mensagem enviada com sucesso!',
         messageId: result.messageId,
       });
     } else {
