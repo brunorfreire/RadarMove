@@ -2,8 +2,13 @@
 
 export async function sendWhatsAppAction(number: string, text: string) {
   try {
-    // 1. No ambiente do navegador (Vite SPA Client), invoca a rota de backend /api/whatsapp sem CORS
+    // 1. No ambiente de execução client (Vite SPA), direciona de forma transparente para a rota de backend /api/whatsapp
     if (typeof window !== "undefined") {
+      const cleanDigits = (number || "").replace(/\D/g, "");
+      const formattedNumber = (cleanDigits.length === 10 || cleanDigits.length === 11) ? `55${cleanDigits}` : cleanDigits;
+      
+      console.log(`[Client Action WhatsApp] Disparando envio para número formatado: ${formattedNumber}`);
+
       const res = await fetch("/api/whatsapp", {
         method: "POST",
         headers: {
@@ -12,11 +17,14 @@ export async function sendWhatsAppAction(number: string, text: string) {
         body: JSON.stringify({ number, text }),
       });
 
+      console.log(`[Client Action WhatsApp] Resposta do servidor - HTTP Status: ${res.status}`);
+
       const responseText = await res.text();
       let data: any = null;
       try {
         data = JSON.parse(responseText);
       } catch {
+        console.error("[Client Action WhatsApp] Resposta não-JSON retornada pelo servidor:", responseText.slice(0, 200));
         return {
           success: false,
           error: `Erro ao comunicar com o servidor: Status ${res.status}.`,
@@ -34,11 +42,12 @@ export async function sendWhatsAppAction(number: string, text: string) {
     }
 
     // 2. No ambiente do servidor (Node.js / Server Action)
-    const apiUrl = process.env.WHATSAPP_API_URL;
-    const apiToken = process.env.WHATSAPP_API_TOKEN;
-    const instance = process.env.WHATSAPP_INSTANCE;
+    const apiUrl = process.env.WHATSAPP_API_URL || "http://76.13.163.205:8080";
+    const apiToken = process.env.WHATSAPP_API_TOKEN || "RadarMoveSeguro2026!";
+    const instance = process.env.WHATSAPP_INSTANCE || "whatsapp_principal";
 
     if (!apiUrl || !apiToken || !instance) {
+      console.warn("[Server Action] Faltam variáveis de ambiente (WHATSAPP_API_URL / TOKEN / INSTANCE)");
       return { success: false, error: "As variáveis de ambiente não foram carregadas no servidor." };
     }
 
@@ -47,7 +56,10 @@ export async function sendWhatsAppAction(number: string, text: string) {
       cleanNumber = "55" + cleanNumber;
     }
 
-    const endpoint = `${apiUrl}/message/sendText/${instance}`;
+    const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendText/${instance}`;
+
+    // Log estratégico antes do fetch exibindo o número formatado e endpoint
+    console.log(`[Server Action WhatsApp] Iniciando fetch para número formatado: ${cleanNumber} | Endpoint: ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -62,13 +74,20 @@ export async function sendWhatsAppAction(number: string, text: string) {
       }),
     });
 
+    const responseText = await response.text();
+
+    // Log estratégico após o fetch exibindo o status HTTP da Evolution API
+    console.log(`[Server Action WhatsApp] Resposta recebida da Evolution API - HTTP Status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: `Erro da Evolution API: ${response.status} - ${errorText}` };
+      console.error(`[Server Action WhatsApp] Falha na Evolution API (${response.status}):`, responseText);
+      return { success: false, error: `Erro da Evolution API: ${response.status} - ${responseText}` };
     }
 
+    console.log(`[Server Action WhatsApp] Mensagem enviada com sucesso para: ${cleanNumber}`);
     return { success: true };
   } catch (error: any) {
+    console.error("[Server Action WhatsApp] Exceção na execução:", error);
     return { success: false, error: `Falha de rede interna: ${error.message}` };
   }
 }

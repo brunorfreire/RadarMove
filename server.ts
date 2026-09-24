@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+// Carrega .env.local prioritariamente e depois .env
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 import express, { Request, Response } from 'express';
@@ -337,11 +339,12 @@ app.post('/api/whatsapp', async (req: Request, res: Response) => {
   try {
     const { number, text } = req.body || {};
 
-    const apiUrl = process.env.WHATSAPP_API_URL;
-    const apiToken = process.env.WHATSAPP_API_TOKEN;
-    const instance = process.env.WHATSAPP_INSTANCE;
+    const apiUrl = process.env.WHATSAPP_API_URL || 'http://76.13.163.205:8080';
+    const apiToken = process.env.WHATSAPP_API_TOKEN || 'RadarMoveSeguro2026!';
+    const instance = process.env.WHATSAPP_INSTANCE || 'whatsapp_principal';
 
     if (!apiUrl || !apiToken || !instance) {
+      console.warn('[Server Route /api/whatsapp] Faltam variáveis de ambiente (WHATSAPP_API_URL / TOKEN / INSTANCE)');
       return res.status(500).json({ success: false, error: 'Credenciais de ambiente não configuradas.' });
     }
 
@@ -350,7 +353,10 @@ app.post('/api/whatsapp', async (req: Request, res: Response) => {
       cleanNumber = '55' + cleanNumber;
     }
 
-    const endpoint = `${apiUrl}/message/sendText/${instance}`;
+    const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendText/${instance}`;
+
+    // Log estratégico antes do fetch exibindo o número formatado
+    console.log(`[Server Route /api/whatsapp] Disparando fetch para Evolution API | Número: ${cleanNumber} | Endpoint: ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -365,16 +371,23 @@ app.post('/api/whatsapp', async (req: Request, res: Response) => {
       }),
     });
 
+    const responseText = await response.text();
+
+    // Log estratégico logo após o fetch exibindo o status HTTP da Evolution API
+    console.log(`[Server Route /api/whatsapp] Resposta recebida da Evolution API - Status HTTP: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
-      const errorText = await response.text();
+      console.error(`[Server Route /api/whatsapp] Erro Evolution API (${response.status}):`, responseText);
       return res.status(response.status || 500).json({
         success: false,
-        error: `Erro na VPS: ${response.status} - ${errorText}`,
+        error: `Erro na VPS: ${response.status} - ${responseText}`,
       });
     }
 
+    console.log(`[Server Route /api/whatsapp] Sucesso no envio para ${cleanNumber}`);
     return res.status(200).json({ success: true });
   } catch (error: any) {
+    console.error('[Server Route /api/whatsapp] Exceção interna:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });

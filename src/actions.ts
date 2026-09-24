@@ -2,11 +2,12 @@
 
 export async function sendWhatsAppAction(number: string, text: string) {
   try {
-    const apiUrl = process.env.WHATSAPP_API_URL;
-    const apiToken = process.env.WHATSAPP_API_TOKEN;
-    const instance = process.env.WHATSAPP_INSTANCE;
+    const apiUrl = process.env.WHATSAPP_API_URL || "http://76.13.163.205:8080";
+    const apiToken = process.env.WHATSAPP_API_TOKEN || "RadarMoveSeguro2026!";
+    const instance = process.env.WHATSAPP_INSTANCE || "whatsapp_principal";
 
     if (!apiUrl || !apiToken || !instance) {
+      console.warn("[Server Action] Faltam variáveis de ambiente (WHATSAPP_API_URL / TOKEN / INSTANCE)");
       return { success: false, error: "As variáveis de ambiente não foram carregadas no servidor." };
     }
 
@@ -15,7 +16,10 @@ export async function sendWhatsAppAction(number: string, text: string) {
       cleanNumber = "55" + cleanNumber;
     }
 
-    const endpoint = `${apiUrl}/message/sendText/${instance}`;
+    const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendText/${instance}`;
+
+    // Log estratégico antes do fetch exibindo o número formatado e endpoint
+    console.log(`[Server Action WhatsApp] Iniciando envio para o número formatado: ${cleanNumber} | Endpoint: ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -30,13 +34,20 @@ export async function sendWhatsAppAction(number: string, text: string) {
       }),
     });
 
+    const responseText = await response.text();
+
+    // Log estratégico após o fetch exibindo o status HTTP da Evolution API
+    console.log(`[Server Action WhatsApp] Resposta recebida da Evolution API - HTTP Status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: `Erro da Evolution API: ${response.status} - ${errorText}` };
+      console.error(`[Server Action WhatsApp] Falha na Evolution API (${response.status}):`, responseText);
+      return { success: false, error: `Erro da Evolution API: ${response.status} - ${responseText}` };
     }
 
+    console.log(`[Server Action WhatsApp] Mensagem enviada com sucesso para: ${cleanNumber}`);
     return { success: true };
   } catch (error: any) {
+    console.error("[Server Action WhatsApp] Exceção na execução:", error);
     return { success: false, error: `Falha de rede interna: ${error.message}` };
   }
 }
