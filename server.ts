@@ -93,13 +93,24 @@ async function sendWhatsAppMessageDirect(
         body: JSON.stringify({
           number: digits,
           text: message,
-          delay: 1200,
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.message || data?.error || 'Falha no envio via Evolution API');
+
+      const responseText = await response.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        // Resposta em HTML (ex: 502 Bad Gateway) ou texto plano
+      }
+
+      if (!response.ok) {
+        const errorDetail = data?.message || data?.error || `Falha na Evolution API (${response.status}): ${responseText.slice(0, 100)}`;
+        throw new Error(errorDetail);
+      }
+
       totalDisparosRealizados++;
-      return { success: true, messageId: data?.key?.id || `evo-${Date.now()}` };
+      return { success: true, messageId: data?.key?.id || data?.messageId || `evo-${Date.now()}` };
     } catch (err: any) {
       console.error('[WhatsApp Server Worker] Erro Evolution API:', err.message);
       return { success: false, error: err.message };

@@ -8,13 +8,11 @@ import {
   Phone, 
   MessageSquare, 
   Sparkles, 
-  ShieldCheck, 
   Zap,
   Info,
-  Clock,
-  Check
 } from 'lucide-react';
-import { formatWhatsAppNumber, formatPhoneDisplay } from '../../lib/whatsappUtils';
+import { formatPhoneDisplay } from '../../lib/whatsappUtils';
+import { sendWhatsAppAction } from '../../actions/whatsapp';
 
 interface MensagemAvulsaModalProps {
   isOpen: boolean;
@@ -30,7 +28,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [statusFeedback, setStatusFeedback] = useState<{
+  const [toast, setToast] = useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
@@ -53,24 +51,20 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     },
   ];
 
-  // Máscara e formatação amigável enquanto digita
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    // Permite digitar dígitos ou símbolos
-    setPhone(raw);
+    setPhone(e.target.value);
   };
 
   const cleanDigits = phone.replace(/\D/g, '');
-  const isDdiIncluded = cleanDigits.startsWith('55') && cleanDigits.length >= 12;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatusFeedback(null);
+    setToast(null);
 
     const rawDigits = phone.replace(/\D/g, '');
 
     if (!rawDigits || rawDigits.length < 10) {
-      setStatusFeedback({
+      setToast({
         type: 'error',
         text: 'Por favor, informe um número de WhatsApp válido com DDD (ex: 5521999999999 ou 21999999999).',
       });
@@ -78,62 +72,53 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     }
 
     if (!message.trim()) {
-      setStatusFeedback({
+      setToast({
         type: 'error',
         text: 'Por favor, digite o conteúdo da mensagem antes de enviar.',
       });
       return;
     }
 
-    // Normaliza para o padrão internacional com DDI 55
-    const formattedPhone = formatWhatsAppNumber(phone);
-
     setIsLoading(true);
 
     try {
-      // Faz requisição POST para a rota de envio com o payload exigido pela Evolution API (number & text)
-      const response = await fetch('/api/whatsapp/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          number: formattedPhone,
-          text: message.trim(),
-          // Envia também aliases comuns para garantia total de interoperabilidade
-          phone: formattedPhone,
-          message: message.trim(),
-        }),
+      // 1. Arquitetura (Server Action): O Modal não faz requisições HTTP diretas,
+      // ele chama exclusivamente a Server Action passando number e message.
+      const result = await sendWhatsAppAction({
+        number: phone,
+        message: message.trim(),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || data?.message || 'Falha ao processar envio na API do WhatsApp');
+      // 4. Tratamento Seguro: exibe o objeto estruturado retornado { success, message }
+      if (!result.success) {
+        setToast({
+          type: 'error',
+          text: result.message || 'Falha ao enviar mensagem via Evolution API.',
+        });
+        return;
       }
 
-      // Sucesso
-      setStatusFeedback({
+      setToast({
         type: 'success',
-        text: 'Mensagem enviada com sucesso!',
+        text: result.message || 'Mensagem enviada com sucesso!',
       });
 
       if (onSuccess) {
-        onSuccess({ phone: formattedPhone, message: message.trim() });
+        onSuccess({ phone, message: message.trim() });
       }
 
-      // Limpa os campos e fecha após breve intervalo de feedback
+      // Limpa formulário e fecha após breve intervalo para visualização do Toast
       setTimeout(() => {
         setPhone('');
         setMessage('');
-        setStatusFeedback(null);
+        setToast(null);
         onClose();
-      }, 1400);
+      }, 1500);
     } catch (err: any) {
-      console.error('[MensagemAvulsaModal] Erro ao enviar mensagem avulsa:', err);
-      setStatusFeedback({
+      console.error('[MensagemAvulsaModal] Erro ao invocar Server Action:', err);
+      setToast({
         type: 'error',
-        text: err?.message || 'Erro ao conectar à API do WhatsApp. Verifique as configurações.',
+        text: err?.message || 'Erro inesperado ao processar o envio via Server Action.',
       });
     } finally {
       setIsLoading(false);
@@ -187,22 +172,23 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
 
         {/* Content Form */}
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 relative z-10">
-          {/* Status Feedback Banner */}
-          {statusFeedback && (
+          {/* Toast / Status Feedback Banner */}
+          {toast && (
             <div
-              id="status-feedback-mensagem-avulsa"
-              className={`p-3 rounded-xl border flex items-center gap-2.5 text-xs font-semibold animate-in fade-in duration-200 ${
-                statusFeedback.type === 'success'
-                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                  : 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+              id="toast-mensagem-avulsa"
+              role="alert"
+              className={`p-3.5 rounded-xl border flex items-center gap-3 text-xs font-semibold shadow-lg transition-all animate-in fade-in slide-in-from-top-2 duration-200 ${
+                toast.type === 'success'
+                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 shadow-emerald-500/10'
+                  : 'bg-rose-500/20 border-rose-500/50 text-rose-200 shadow-rose-500/10'
               }`}
             >
-              {statusFeedback.type === 'success' ? (
+              {toast.type === 'success' ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
               ) : (
                 <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
               )}
-              <span className="flex-1">{statusFeedback.text}</span>
+              <span className="flex-1 leading-snug">{toast.text}</span>
             </div>
           )}
 

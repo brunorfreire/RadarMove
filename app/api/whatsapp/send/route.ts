@@ -45,16 +45,22 @@ export async function POST(request: Request) {
           }),
         });
 
-        const data = await response.json();
+        const responseText = await response.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          // Resposta não-JSON (ex: HTML 502/500)
+        }
 
         if (!response.ok) {
-          throw new Error(data?.message || 'Falha ao comunicar com a Evolution API');
+          throw new Error(data?.message || data?.error || `Falha na Evolution API (${response.status}): ${responseText.slice(0, 100)}`);
         }
 
         return NextResponse.json({
           success: true,
           provider: 'evolution_api',
-          messageId: data?.key?.id || `evo-${Date.now()}`,
+          messageId: data?.key?.id || data?.messageId || `evo-${Date.now()}`,
           message: 'Mensagem enviada com sucesso via Evolution API!',
         });
       } catch (externalError: any) {
