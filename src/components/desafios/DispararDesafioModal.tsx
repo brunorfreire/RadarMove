@@ -8,11 +8,12 @@ import {
   Sparkles, 
   Check, 
   AlertTriangle, 
-  Search,
-  MessageSquare,
-  Clock,
-  Phone,
-  Calendar
+  Search, 
+  MessageSquare, 
+  Clock, 
+  Phone, 
+  Calendar,
+  Loader2
 } from 'lucide-react';
 import { Aluno, DesafioTemplate, WhatsAppMensagem, DesafioEnviado } from '../../types';
 import { verificarDesafioRepetido } from '../../lib/historicoDesafiosUtils';
@@ -52,6 +53,13 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [customMessage, setCustomMessage] = useState(desafio.mensagem_whatsapp);
   const [sentSuccess, setSentSuccess] = useState(false);
+  const [isSendingBackground, setIsSendingBackground] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   const selectedAluno = alunos.find(a => a.id === selectedAlunoId) || alunos[0];
 
@@ -99,16 +107,78 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     setSelectedMassaIds(alunos.map(a => a.id));
   };
 
-  const handleSend = (abrirWhatsAppWeb: boolean) => {
+  const handleSend = async (enviarViaApi: boolean) => {
     const targetIds = mode === 'individual' ? [selectedAluno.id] : selectedMassaIds;
     if (targetIds.length === 0) return;
+    if (isSendingBackground) return;
 
-    onDisparoConcluido(targetIds, desafio, customMessage, abrirWhatsAppWeb);
-    setSentSuccess(true);
-    setTimeout(() => {
-      setSentSuccess(false);
-      onClose();
-    }, 1200);
+    if (enviarViaApi) {
+      setIsSendingBackground(true);
+      try {
+        if (mode === 'individual') {
+          const personalizedText = getPreviewText(customMessage, selectedAluno.nome);
+          const response = await fetch('/api/whatsapp/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              phone: selectedAluno.telefone,
+              message: personalizedText,
+            }),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data?.error || data?.message || 'Falha ao enviar desafio via API');
+          }
+        } else {
+          // Disparo individual em lote para cada aluno selecionado
+          for (const aId of targetIds) {
+            const a = alunos.find((x) => x.id === aId);
+            if (a) {
+              const personalizedText = getPreviewText(customMessage, a.nome);
+              await fetch('/api/whatsapp/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  phone: a.telefone,
+                  message: personalizedText,
+                }),
+              });
+            }
+          }
+        }
+
+        showToast('Desafio enviado com sucesso!');
+        onDisparoConcluido(targetIds, desafio, customMessage, false);
+        setSentSuccess(true);
+        setTimeout(() => {
+          setSentSuccess(false);
+          onClose();
+        }, 1200);
+      } catch (err: any) {
+        console.error('[DispararDesafioModal] Erro ao enviar via API:', err);
+        showToast(err?.message || 'Erro ao disparar via API. Registrando no sistema...');
+        onDisparoConcluido(targetIds, desafio, customMessage, false);
+        setSentSuccess(true);
+        setTimeout(() => {
+          setSentSuccess(false);
+          onClose();
+        }, 1200);
+      } finally {
+        setIsSendingBackground(false);
+      }
+    } else {
+      // Apenas registrar no sistema sem chamar WhatsApp
+      onDisparoConcluido(targetIds, desafio, customMessage, false);
+      showToast('Desafio registrado no histórico com sucesso!');
+      setSentSuccess(true);
+      setTimeout(() => {
+        setSentSuccess(false);
+        onClose();
+      }, 1200);
+    }
   };
 
   return (
@@ -445,35 +515,68 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
                   type="button"
                   id="btn-enviar-whatsapp-direto"
                   onClick={() => handleSend(true)}
-                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg active:scale-95 transition-all cursor-pointer ${
+                  disabled={isSendingBackground}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
                     repeticaoIndividual.repetido
                       ? 'bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 shadow-amber-500/20 hover:brightness-110'
                       : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 shadow-emerald-500/30 hover:brightness-110'
                   }`}
                 >
-                  <Send className="h-4 w-4 text-slate-950 fill-slate-950" />
-                  <span>
-                    {repeticaoIndividual.repetido
-                      ? `Reenviar via WhatsApp (${selectedAluno.nome.split(' ')[0]})`
-                      : `Enviar via WhatsApp (${selectedAluno.nome.split(' ')[0]})`}
-                  </span>
+                  {isSendingBackground ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
+                      <span>Enviando em segundo plano...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 text-slate-950 fill-slate-950" />
+                      <span>
+                        {repeticaoIndividual.repetido
+                          ? `Reenviar via WhatsApp (${selectedAluno.nome.split(' ')[0]})`
+                          : `Enviar via WhatsApp (${selectedAluno.nome.split(' ')[0]})`}
+                      </span>
+                    </>
+                  )}
                 </button>
               </>
             ) : (
               <button
                 type="button"
                 id="btn-disparar-em-massa"
-                onClick={() => handleSend(false)}
-                disabled={selectedMassaIds.length === 0}
+                onClick={() => handleSend(true)}
+                disabled={selectedMassaIds.length === 0 || isSendingBackground}
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-6 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Send className="h-4 w-4 text-slate-950 fill-slate-950" />
-                <span>Disparar para {selectedMassaIds.length} Alunos</span>
+                {isSendingBackground ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
+                    <span>Disparando em massa...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 text-slate-950 fill-slate-950" />
+                    <span>Disparar para {selectedMassaIds.length} Alunos</span>
+                  </>
+                )}
               </button>
             )}
           </div>
         </div>
       </div>
+
+      {/* Toast Notification no Modal */}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-[#021813] px-4 py-3 text-xs font-semibold text-emerald-300 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-200"
+        >
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+            <Check className="h-3 w-3 stroke-[3]" />
+          </div>
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 };

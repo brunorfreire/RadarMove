@@ -315,6 +315,36 @@ app.post('/api/whatsapp/schedule', (req: Request, res: Response) => {
 });
 
 // Disparar imediatamente pelo servidor (sem abrir web.whatsapp.com)
+app.post('/api/whatsapp/send', async (req: Request, res: Response) => {
+  const { phone, message, telefone, mensagem } = req.body;
+  const targetPhone = phone || telefone;
+  const targetMessage = message || mensagem;
+
+  if (!targetPhone || !targetMessage) {
+    return res.status(400).json({ error: 'Parâmetros "phone" e "message" são obrigatórios.' });
+  }
+
+  try {
+    const result = await sendWhatsAppMessageDirect(targetPhone, targetMessage);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Desafio enviado com sucesso!',
+        messageId: result.messageId,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error || 'Falha ao enviar mensagem',
+      });
+    }
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Alias legado para compatibilidade interna
 app.post('/api/whatsapp/dispatch-now', async (req: Request, res: Response) => {
   const { id, telefone, mensagem, aluno_nome, aluno_id } = req.body;
 

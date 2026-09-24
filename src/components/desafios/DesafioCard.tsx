@@ -23,7 +23,8 @@ import {
   CheckCircle2,
   Compass,
   Target,
-  Calendar
+  Calendar,
+  Loader2
 } from 'lucide-react';
 import { DesafioTemplate, CategoriaDesafio, Aluno, DesafioEnviado } from '../../types';
 import { openWhatsApp } from '../../lib/whatsappUtils';
@@ -54,6 +55,13 @@ export const DesafioCard: React.FC<DesafioCardProps> = ({
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [selectedAlunoId, setSelectedAlunoId] = useState<string>(alunos[0]?.id || '');
   const [quickSent, setQuickSent] = useState(false);
+  const [isSendingBackground, setIsSendingBackground] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   const getCategoryConfig = (categoria: CategoriaDesafio) => {
     switch (categoria) {
@@ -156,17 +164,50 @@ export const DesafioCard: React.FC<DesafioCardProps> = ({
       .replace(/\{personal\}/g, 'Treinador');
   };
 
-  const handleQuickSend = (e: React.MouseEvent) => {
+  const handleQuickSend = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!selectedAluno) return;
-    const personalizedText = formatMessageForAluno();
-    openWhatsApp(selectedAluno.telefone, personalizedText);
+    if (isSendingBackground) return;
 
-    if (onQuickSendWhatsApp) {
-      onQuickSendWhatsApp(selectedAluno, desafio, personalizedText);
+    const personalizedText = formatMessageForAluno();
+    setIsSendingBackground(true);
+
+    try {
+      const response = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone: selectedAluno.telefone,
+          message: personalizedText,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || data?.message || 'Erro ao enviar desafio');
+      }
+
+      showToast('Desafio enviado com sucesso!');
+
+      if (onQuickSendWhatsApp) {
+        onQuickSendWhatsApp(selectedAluno, desafio, personalizedText);
+      }
+      setQuickSent(true);
+      setTimeout(() => setQuickSent(false), 3500);
+    } catch (err: any) {
+      console.error('[DesafioCard] Erro ao disparar em background:', err);
+      // Fallback gracioso se a rota local encontrar restrição
+      openWhatsApp(selectedAluno.telefone, personalizedText);
+      showToast('Enviando via WhatsApp Web...');
+      if (onQuickSendWhatsApp) {
+        onQuickSendWhatsApp(selectedAluno, desafio, personalizedText);
+      }
+    } finally {
+      setIsSendingBackground(false);
     }
-    setQuickSent(true);
-    setTimeout(() => setQuickSent(false), 3500);
   };
 
   // Render message with highlighted tag
@@ -358,20 +399,30 @@ export const DesafioCard: React.FC<DesafioCardProps> = ({
                 type="button"
                 id={`btn-enviar-wpp-rapido-${desafio.id}`}
                 onClick={handleQuickSend}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs shadow-md transition-all cursor-pointer ${
+                disabled={isSendingBackground}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs shadow-md transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
                   repeticaoStatus.repetido
                     ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 shadow-amber-500/20 hover:brightness-110'
                     : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 text-slate-950 shadow-cyan-500/20 hover:brightness-110'
                 } active:scale-95`}
               >
-                <Send className="h-3.5 w-3.5 fill-slate-950 text-slate-950" />
-                <span>
-                  {quickSent 
-                    ? 'Reenviado!' 
-                    : repeticaoStatus.repetido 
-                      ? `Reenviar no WhatsApp (${alunoFirstName})` 
-                      : `Enviar no WhatsApp (${alunoFirstName})`}
-                </span>
+                {isSendingBackground ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" />
+                    <span>Enviando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-3.5 w-3.5 fill-slate-950 text-slate-950" />
+                    <span>
+                      {quickSent 
+                        ? 'Enviado!' 
+                        : repeticaoStatus.repetido 
+                          ? `Reenviar no WhatsApp (${alunoFirstName})` 
+                          : `Enviar no WhatsApp (${alunoFirstName})`}
+                    </span>
+                  </>
+                )}
               </button>
 
               {onAgendar && (
@@ -499,6 +550,19 @@ export const DesafioCard: React.FC<DesafioCardProps> = ({
           </button>
         </div>
       </div>
+      {/* Toast Notification no Card */}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-[#021813] px-4 py-3 text-xs font-semibold text-emerald-300 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-200"
+        >
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+            <Check className="h-3 w-3 stroke-[3]" />
+          </div>
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 };
