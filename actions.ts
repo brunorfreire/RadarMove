@@ -1,56 +1,33 @@
-"use server";
-
 /**
- * Server Action para envio de WhatsApp.
- * Executa estritamente no backend Node.js (ou faz proxy para a rota segura /api/whatsapp quando chamado pelo cliente),
- * garantindo que as credenciais fiquem apenas no servidor e contornando bloqueios de Mixed Content.
+ * Disparo direto para Evolution API no lado do cliente (Vite / React SPA).
+ * Lê as variáveis públicas do Vite:
+ * - VITE_WHATSAPP_API_URL
+ * - VITE_WHATSAPP_API_TOKEN
+ * - VITE_WHATSAPP_INSTANCE
  */
 export async function sendWhatsAppAction(number: string, text: string) {
   try {
-    // 1. Se invocado no ambiente de execução do navegador, repassa para a rota de API local segura
-    if (typeof window !== "undefined") {
-      const cleanDigits = (number || "").replace(/\D/g, "");
-      const formattedNumber = (cleanDigits.length === 10 || cleanDigits.length === 11) ? `55${cleanDigits}` : cleanDigits;
+    const apiUrl =
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_WHATSAPP_API_URL) ||
+      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_API_URL) ||
+      "";
 
-      console.log(`[Client -> Server WhatsApp] Solicitando envio backend para: ${formattedNumber}`);
+    const apiToken =
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_WHATSAPP_API_TOKEN) ||
+      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_API_TOKEN) ||
+      "";
 
-      const res = await fetch("/api/whatsapp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ number, text }),
-      });
-
-      const responseText = await res.text();
-      let data: any = null;
-      try {
-        data = JSON.parse(responseText);
-      } catch {
-        return {
-          success: false,
-          error: `Erro ao comunicar com o servidor: Status HTTP ${res.status}.`,
-        };
-      }
-
-      if (!res.ok || data?.success === false) {
-        return {
-          success: false,
-          error: data?.error || `Falha no envio (Status HTTP ${res.status}).`,
-        };
-      }
-
-      return { success: true };
-    }
-
-    // 2. Se executado no backend Node.js (Server Action / Server-side)
-    const apiUrl = process.env.WHATSAPP_API_URL;
-    const apiToken = process.env.WHATSAPP_API_TOKEN;
-    const instance = process.env.WHATSAPP_INSTANCE;
+    const instance =
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_WHATSAPP_INSTANCE) ||
+      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_INSTANCE) ||
+      "";
 
     if (!apiUrl || !apiToken || !instance) {
-      console.warn("[Server Action WhatsApp] Faltam variáveis de ambiente privadas no servidor (WHATSAPP_API_URL / WHATSAPP_API_TOKEN / WHATSAPP_INSTANCE)");
-      return { success: false, error: "As variáveis de ambiente não foram carregadas no servidor." };
+      console.warn("[WhatsApp Client] Faltam variáveis de ambiente (VITE_WHATSAPP_API_URL / VITE_WHATSAPP_API_TOKEN / VITE_WHATSAPP_INSTANCE)");
+      return {
+        success: false,
+        error: "Variáveis de ambiente (VITE_WHATSAPP_API_URL / TOKEN / INSTANCE) não configuradas no build do Vite.",
+      };
     }
 
     let cleanNumber = (number || "").replace(/\D/g, "");
@@ -58,9 +35,9 @@ export async function sendWhatsAppAction(number: string, text: string) {
       cleanNumber = "55" + cleanNumber;
     }
 
-    const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendText/${instance}`;
+    const endpoint = `${apiUrl.replace(/\/$/, "")}/message/sendText/${instance}`;
 
-    console.log(`[Server Action WhatsApp] Disparando fetch seguro para: ${cleanNumber} | Endpoint: ${endpoint}`);
+    console.log(`[WhatsApp Client] Disparando fetch para: ${cleanNumber} | Endpoint: ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -71,23 +48,35 @@ export async function sendWhatsAppAction(number: string, text: string) {
       body: JSON.stringify({
         number: cleanNumber,
         options: { delay: 1000, presence: "composing" },
-        textMessage: { text }
+        textMessage: { text },
       }),
     });
 
     const responseText = await response.text();
-
-    console.log(`[Server Action WhatsApp] Resposta recebida da Evolution API - HTTP Status: ${response.status} ${response.statusText}`);
+    console.log(`[WhatsApp Client] Resposta recebida da Evolution API - Status HTTP: ${response.status}`);
 
     if (!response.ok) {
-      console.error(`[Server Action WhatsApp] Falha na Evolution API (${response.status}):`, responseText);
-      return { success: false, error: `Erro da Evolution API: ${response.status} - ${responseText}` };
+      return {
+        success: false,
+        error: `Falha na Evolution API (${response.status}): ${responseText || response.statusText}`,
+      };
     }
 
-    console.log(`[Server Action WhatsApp] Mensagem enviada com sucesso para: ${cleanNumber}`);
-    return { success: true };
+    let data: any = null;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = null;
+    }
+
+    return { success: true, data };
   } catch (error: any) {
-    console.error("[Server Action WhatsApp] Exceção na execução:", error);
-    return { success: false, error: `Falha de rede interna: ${error.message}` };
+    console.error("[WhatsApp Client] Erro no envio:", error);
+    return {
+      success: false,
+      error: error?.message?.includes("Failed to fetch")
+        ? "Falha na conexão com a Evolution API (Failed to fetch). Verifique se o domínio possui certificado SSL (HTTPS) ou se o CORS está liberado."
+        : `Erro de rede: ${error?.message || error}`,
+    };
   }
 }
