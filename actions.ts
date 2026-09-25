@@ -1,13 +1,18 @@
 "use server";
 
+/**
+ * Server Action para envio de WhatsApp.
+ * Executa estritamente no backend Node.js (ou faz proxy para a rota segura /api/whatsapp quando chamado pelo cliente),
+ * garantindo que as credenciais fiquem apenas no servidor e contornando bloqueios de Mixed Content.
+ */
 export async function sendWhatsAppAction(number: string, text: string) {
   try {
-    // 1. No ambiente de execução client (Vite SPA), direciona de forma transparente para a rota de backend /api/whatsapp
+    // 1. Se invocado no ambiente de execução do navegador, repassa para a rota de API local segura
     if (typeof window !== "undefined") {
       const cleanDigits = (number || "").replace(/\D/g, "");
       const formattedNumber = (cleanDigits.length === 10 || cleanDigits.length === 11) ? `55${cleanDigits}` : cleanDigits;
-      
-      console.log(`[Client Action WhatsApp] Disparando envio para número formatado: ${formattedNumber}`);
+
+      console.log(`[Client -> Server WhatsApp] Solicitando envio backend para: ${formattedNumber}`);
 
       const res = await fetch("/api/whatsapp", {
         method: "POST",
@@ -17,17 +22,14 @@ export async function sendWhatsAppAction(number: string, text: string) {
         body: JSON.stringify({ number, text }),
       });
 
-      console.log(`[Client Action WhatsApp] Resposta do servidor - HTTP Status: ${res.status}`);
-
       const responseText = await res.text();
       let data: any = null;
       try {
         data = JSON.parse(responseText);
       } catch {
-        console.error("[Client Action WhatsApp] Resposta não-JSON retornada pelo servidor:", responseText.slice(0, 200));
         return {
           success: false,
-          error: `Erro ao comunicar com o servidor: Status ${res.status}.`,
+          error: `Erro ao comunicar com o servidor: Status HTTP ${res.status}.`,
         };
       }
 
@@ -41,24 +43,13 @@ export async function sendWhatsAppAction(number: string, text: string) {
       return { success: true };
     }
 
-    // 2. No ambiente do servidor (Node.js / Server Action)
-    const apiUrl =
-      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_WHATSAPP_API_URL) ||
-      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_API_URL) ||
-      (typeof process !== "undefined" && process.env?.WHATSAPP_API_URL);
-
-    const apiToken =
-      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_WHATSAPP_API_TOKEN) ||
-      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_API_TOKEN) ||
-      (typeof process !== "undefined" && process.env?.WHATSAPP_API_TOKEN);
-
-    const instance =
-      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_WHATSAPP_INSTANCE) ||
-      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_INSTANCE) ||
-      (typeof process !== "undefined" && process.env?.WHATSAPP_INSTANCE);
+    // 2. Se executado no backend Node.js (Server Action / Server-side)
+    const apiUrl = process.env.WHATSAPP_API_URL;
+    const apiToken = process.env.WHATSAPP_API_TOKEN;
+    const instance = process.env.WHATSAPP_INSTANCE;
 
     if (!apiUrl || !apiToken || !instance) {
-      console.warn("[Server Action] Faltam variáveis de ambiente (VITE_WHATSAPP_API_URL / TOKEN / INSTANCE)");
+      console.warn("[Server Action WhatsApp] Faltam variáveis de ambiente privadas no servidor (WHATSAPP_API_URL / WHATSAPP_API_TOKEN / WHATSAPP_INSTANCE)");
       return { success: false, error: "As variáveis de ambiente não foram carregadas no servidor." };
     }
 
@@ -69,8 +60,7 @@ export async function sendWhatsAppAction(number: string, text: string) {
 
     const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendText/${instance}`;
 
-    // Log estratégico antes do fetch exibindo o número formatado e endpoint
-    console.log(`[Server Action WhatsApp] Iniciando fetch para número formatado: ${cleanNumber} | Endpoint: ${endpoint}`);
+    console.log(`[Server Action WhatsApp] Disparando fetch seguro para: ${cleanNumber} | Endpoint: ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -87,7 +77,6 @@ export async function sendWhatsAppAction(number: string, text: string) {
 
     const responseText = await response.text();
 
-    // Log estratégico após o fetch exibindo o status HTTP da Evolution API
     console.log(`[Server Action WhatsApp] Resposta recebida da Evolution API - HTTP Status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {

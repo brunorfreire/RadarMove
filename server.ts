@@ -339,12 +339,12 @@ app.post('/api/whatsapp', async (req: Request, res: Response) => {
   try {
     const { number, text } = req.body || {};
 
-    const apiUrl = process.env.VITE_WHATSAPP_API_URL || process.env.WHATSAPP_API_URL;
-    const apiToken = process.env.VITE_WHATSAPP_API_TOKEN || process.env.WHATSAPP_API_TOKEN;
-    const instance = process.env.VITE_WHATSAPP_INSTANCE || process.env.WHATSAPP_INSTANCE;
+    const apiUrl = process.env.WHATSAPP_API_URL;
+    const apiToken = process.env.WHATSAPP_API_TOKEN;
+    const instance = process.env.WHATSAPP_INSTANCE;
 
     if (!apiUrl || !apiToken || !instance) {
-      console.warn('[Server Route /api/whatsapp] Faltam variáveis de ambiente (VITE_WHATSAPP_API_URL / TOKEN / INSTANCE)');
+      console.warn('[Server Route /api/whatsapp] Faltam variáveis de ambiente (WHATSAPP_API_URL / TOKEN / INSTANCE)');
       return res.status(500).json({ success: false, error: 'Credenciais de ambiente não configuradas.' });
     }
 
