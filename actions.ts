@@ -42,12 +42,23 @@ export async function sendWhatsAppAction(number: string, text: string) {
     }
 
     // 2. No ambiente do servidor (Node.js / Server Action)
-    const apiUrl = process.env.WHATSAPP_API_URL;
-    const apiToken = process.env.WHATSAPP_API_TOKEN;
-    const instance = process.env.WHATSAPP_INSTANCE;
+    const apiUrl =
+      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_WHATSAPP_API_URL) ||
+      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_API_URL) ||
+      (typeof process !== "undefined" && process.env?.WHATSAPP_API_URL);
+
+    const apiToken =
+      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_WHATSAPP_API_TOKEN) ||
+      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_API_TOKEN) ||
+      (typeof process !== "undefined" && process.env?.WHATSAPP_API_TOKEN);
+
+    const instance =
+      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_WHATSAPP_INSTANCE) ||
+      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_INSTANCE) ||
+      (typeof process !== "undefined" && process.env?.WHATSAPP_INSTANCE);
 
     if (!apiUrl || !apiToken || !instance) {
-      console.warn("[Server Action] Faltam variáveis de ambiente (WHATSAPP_API_URL / TOKEN / INSTANCE)");
+      console.warn("[Server Action] Faltam variáveis de ambiente (VITE_WHATSAPP_API_URL / TOKEN / INSTANCE)");
       return { success: false, error: "As variáveis de ambiente não foram carregadas no servidor." };
     }
 
