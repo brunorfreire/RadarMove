@@ -47,8 +47,7 @@ export async function sendWhatsAppAction(number: string, text: string) {
       },
       body: JSON.stringify({
         number: cleanNumber,
-        options: { delay: 1000, presence: "composing" },
-        textMessage: { text },
+        text: text,
       }),
     });
 

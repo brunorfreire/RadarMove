@@ -366,8 +366,7 @@ app.post('/api/whatsapp', async (req: Request, res: Response) => {
       },
       body: JSON.stringify({
         number: cleanNumber,
-        options: { delay: 1000, presence: 'composing' },
-        textMessage: { text },
+        text: text,
       }),
     });
 
