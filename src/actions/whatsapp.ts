@@ -56,10 +56,10 @@ export async function sendWhatsAppMessage(number: string, text: string) {
         "apikey": apiToken,
       },
       body: JSON.stringify({
-        number: cleanNumber,
-        options: { delay: 1000, presence: "composing" },
-        textMessage: { text: text }
-      }),
+          number: cleanNumber,
+          options: { delay: 1000, presence: "composing" },
+          text: text
+        }),
     });
 
     const responseText = await response.text();
