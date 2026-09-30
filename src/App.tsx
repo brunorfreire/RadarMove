@@ -7,6 +7,7 @@ import { DesafiosView } from './components/desafios/DesafiosView';
 import { LeadsView } from './components/leads/LeadsView';
 import { QuickVoiceModal } from './components/audio/QuickVoiceModal';
 import { MensagemAvulsaModal } from './components/layout/MensagemAvulsaModal';
+import { DisparoWhatsAppView } from './components/disparos/DisparoWhatsAppView';
 import { SupabaseConnectionView } from './components/supabase/SupabaseConnectionView';
 import { AuthPage } from './components/auth/AuthPage';
 import { supabase } from './lib/supabaseClient';
@@ -28,7 +29,7 @@ import { Loader2 } from 'lucide-react';
 export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'alunos' | 'desafios' | 'leads' | 'supabase'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'alunos' | 'disparos' | 'desafios' | 'leads' | 'supabase'>('dashboard');
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isMensagemAvulsaOpen, setIsMensagemAvulsaOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -865,6 +866,14 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'disparos' && (
+            <DisparoWhatsAppView 
+              onNavigateLogin={() => {
+                window.location.hash = '#login';
+              }}
+            />
+          )}
+
           {activeTab === 'leads' && (
             <LeadsView
               leads={leads}
@@ -903,13 +912,14 @@ export default function App() {
       <MensagemAvulsaModal
         isOpen={isMensagemAvulsaOpen}
         onClose={() => setIsMensagemAvulsaOpen(false)}
-        onSuccess={({ phone, message }) => {
+        alunos={alunos}
+        onSuccess={({ phone, message, alunoNome }) => {
           // Adiciona ao feed de WhatsApp para histórico visual imediato
           setFeedWhatsApp((prev) => [
             {
               id: `avulsa-${Date.now()}`,
               aluno_id: 'avulso',
-              aluno_nome: `Destinatário Avulso (+${phone})`,
+              aluno_nome: alunoNome || `Destinatário Avulso (+${phone})`,
               texto: message,
               origem: 'personal',
               data_hora: 'Agora',

@@ -20,8 +20,8 @@ import { UserProfileDropdown } from './UserProfileDropdown';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'alunos' | 'desafios' | 'leads' | 'supabase';
-  setActiveTab: (tab: 'dashboard' | 'alunos' | 'desafios' | 'leads' | 'supabase') => void;
+  activeTab: 'dashboard' | 'alunos' | 'disparos' | 'desafios' | 'leads' | 'supabase';
+  setActiveTab: (tab: 'dashboard' | 'alunos' | 'disparos' | 'desafios' | 'leads' | 'supabase') => void;
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
   profissional: Profissional;
@@ -58,6 +58,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badge: '24',
       badgeColor: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
       tooltip: 'Bioimpedância, Evolução e Gráficos',
+    },
+    {
+      id: 'disparos' as const,
+      label: 'Disparo WhatsApp',
+      icon: Send,
+      badge: 'wa.me',
+      badgeColor: 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/40 font-mono',
+      tooltip: 'Envio Direto sem APIs Externas',
     },
     {
       id: 'leads' as const,

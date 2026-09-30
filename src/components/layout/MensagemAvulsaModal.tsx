@@ -1,39 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   X, 
   Send, 
-  Loader2, 
   CheckCircle2, 
   AlertCircle, 
   Phone, 
   MessageSquare, 
   Sparkles, 
-  Zap,
+  Zap, 
   Info,
+  Users,
+  Search,
+  ExternalLink,
+  UserCheck
 } from 'lucide-react';
-import { formatPhoneDisplay } from '../../lib/whatsappUtils';
+import { formatPhoneDisplay, formatWhatsAppNumber, getWhatsAppUrl } from '../../lib/whatsappUtils';
 import { sendWhatsAppAction } from './actions';
+import { Aluno } from '../../types';
 
 interface MensagemAvulsaModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (info: { phone: string; message: string }) => void;
+  alunos?: Aluno[];
+  onSuccess?: (info: { phone: string; message: string; alunoNome?: string }) => void;
 }
 
 export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
   isOpen,
   onClose,
+  alunos = [],
   onSuccess,
 }) => {
+  // Modo de seleção: contato existente do RadarMove ou número avulso digitado
+  const [recipientMode, setRecipientMode] = useState<'contato' | 'avulso'>(
+    alunos.length > 0 ? 'contato' : 'avulso'
+  );
+  const [selectedAlunoId, setSelectedAlunoId] = useState<string>('');
+  const [searchContact, setSearchContact] = useState('');
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
 
-  if (!isOpen) return null;
+  // Aluno atualmente selecionado quando no modo contato
+  const selectedAluno = useMemo(() => {
+    return alunos.find((a) => a.id === selectedAlunoId) || null;
+  }, [alunos, selectedAlunoId]);
+
+  // Filtra lista de contatos/alunos por nome ou telefone
+  const filteredAlunos = useMemo(() => {
+    if (!searchContact.trim()) return alunos;
+    const q = searchContact.toLowerCase();
+    return alunos.filter(
+      (a) =>
+        a.nome.toLowerCase().includes(q) ||
+        (a.telefone && a.telefone.replace(/\D/g, '').includes(q.replace(/\D/g, '')))
+    );
+  }, [alunos, searchContact]);
+
+  // Define o telefone ativo conforme o modo selecionado
+  const activePhone = recipientMode === 'contato' ? (selectedAluno?.telefone || '') : phone;
+  const cleanDigits = activePhone.replace(/\D/g, '');
+  const formattedWhatsAppNumber = formatWhatsAppNumber(activePhone);
 
   // Preset templates rápidos para agilizar o trabalho do personal
   const quickTemplates = [
@@ -43,21 +73,34 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     },
     {
       label: 'Convite Avaliação',
-      text: 'Olá! Sou o seu treinador do RadarMove. Gostaria de te convidar para agendarmos a sua próxima avaliação física e alinharmos as novas metas de treino. Que dia fica melhor para você?',
+      text: 'Olá! Gostaria de te convidar para agendarmos a sua próxima avaliação física e alinharmos as novas metas de treino. Que dia e horário ficam melhores para você?',
     },
     {
-      label: 'Aviso & Check-in',
-      text: 'Olá! Passando para um check-in rápido de treino e recuperação. Como estão as suas dores musculares e energia hoje?',
+      label: 'Check-in e Energia',
+      text: 'Olá! Passando para um check-in rápido de treino e recuperação. Como estão suas dores musculares, descanso e disposição hoje?',
+    },
+    {
+      label: 'Feedback Treino',
+      text: 'Parabéns pela dedicação no treino de hoje! Manteve uma constância excelente. Continue nesse ritmo!',
     },
   ];
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPhone(e.target.value);
+  // Aplica placeholders como {aluno} se selecionado contato
+  const applyTemplate = (tplText: string) => {
+    if (selectedAluno) {
+      const primeiroNome = selectedAluno.nome.split(' ')[0];
+      setMessage(tplText.replace(/Olá!/g, `Olá, ${primeiroNome}!`));
+    } else {
+      setMessage(tplText);
+    }
   };
 
-  const cleanDigits = phone.replace(/\D/g, '');
+  const handleSelectAluno = (aluno: Aluno) => {
+    setSelectedAlunoId(aluno.id);
+    setToast(null);
+  };
 
-  // 1. Previne recarregamento nativo de página que quebra o iframe
+  // Disparo nativo via link universal wa.me
   const handleSend = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -65,11 +108,10 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     }
     setToast(null);
 
-    const rawDigits = phone.replace(/\D/g, '');
-    if (!rawDigits || rawDigits.length < 10) {
+    if (!cleanDigits || cleanDigits.length < 8) {
       setToast({
         type: 'error',
-        text: 'Por favor, informe um número de WhatsApp válido com DDD (ex: 5521999999999 ou 21999999999).',
+        text: 'Por favor, selecione um contato com telefone cadastrado ou informe um número com DDD.',
       });
       return;
     }
@@ -77,45 +119,50 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     if (!message.trim()) {
       setToast({
         type: 'error',
-        text: 'Por favor, digite o conteúdo da mensagem antes de enviar.',
+        text: 'Por favor, digite o conteúdo da mensagem antes de abrir o WhatsApp.',
       });
       return;
     }
 
-    setIsLoading(true);
     try {
-      const result = await sendWhatsAppAction(phone, message.trim());
-      
+      const result = await sendWhatsAppAction(activePhone, message.trim());
+
       if (result.success) {
         setToast({
           type: 'success',
-          text: 'Mensagem enviada com sucesso!',
+          text: 'WhatsApp aberto com sucesso! Você pode enviar e continuar a conversa nativamente.',
         });
+
         if (onSuccess) {
-          onSuccess({ phone, message: message.trim() });
+          onSuccess({
+            phone: activePhone,
+            message: message.trim(),
+            alunoNome: selectedAluno?.nome,
+          });
         }
-        // Feche o modal e limpe os campos aqui
+
         setTimeout(() => {
           setPhone('');
           setMessage('');
+          setSelectedAlunoId('');
           setToast(null);
           onClose();
-        }, 1500);
+        }, 1200);
       } else {
         setToast({
           type: 'error',
-          text: result.error || 'Falha ao enviar.',
+          text: result.error || 'Não foi possível gerar o link do WhatsApp.',
         });
       }
     } catch (error: any) {
       setToast({
         type: 'error',
-        text: 'Erro ao executar ação: ' + error.message,
+        text: 'Erro ao abrir WhatsApp: ' + error.message,
       });
-    } finally {
-      setIsLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -140,13 +187,13 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-white">Mensagem Avulsa</h3>
-                <span className="rounded bg-cyan-400/15 px-2 py-0.5 text-[10px] font-bold text-cyan-300 border border-cyan-400/30">
-                  Envio Rápido
+                <h3 className="font-extrabold text-base text-white">Disparo WhatsApp</h3>
+                <span className="rounded bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-400/30">
+                  Link Nativo (wa.me)
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Dispare via Evolution API sem cadastrar a pessoa como aluno
+                Envio direto, seguro e sem limite de API externa
               </p>
             </div>
           </div>
@@ -184,43 +231,162 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
             </div>
           )}
 
-          {/* Campo: Número do WhatsApp */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label htmlFor="input-whatsapp-phone" className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Número do WhatsApp</span>
-                <span className="text-rose-400">*</span>
-              </label>
+          {/* Abas seletoras: Contato Existente vs Número Avulso */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Destinatário</span>
+              <span className="text-rose-400">*</span>
+            </label>
 
-              {cleanDigits.length >= 10 && (
-                <span className="text-[11px] font-mono text-cyan-300">
-                  DDI +55 ativo
-                </span>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-[#02140f] rounded-xl border border-emerald-500/20">
+              <button
+                type="button"
+                onClick={() => {
+                  setRecipientMode('contato');
+                  setToast(null);
+                }}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  recipientMode === 'contato'
+                    ? 'bg-gradient-to-r from-emerald-500/25 to-teal-500/25 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>Contato ({alunos.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRecipientMode('avulso');
+                  setToast(null);
+                }}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  recipientMode === 'avulso'
+                    ? 'bg-gradient-to-r from-emerald-500/25 to-teal-500/25 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Phone className="h-3.5 w-3.5" />
+                <span>Número Avulso</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Modo 1: Seleção de Contato Existente */}
+          {recipientMode === 'contato' && (
+            <div className="space-y-2 bg-[#021813]/60 border border-emerald-500/20 rounded-xl p-3">
+              {alunos.length === 0 ? (
+                <div className="text-center py-3 text-xs text-slate-400">
+                  <p>Nenhum aluno cadastrado ainda.</p>
+                  <button
+                    type="button"
+                    onClick={() => setRecipientMode('avulso')}
+                    className="text-cyan-400 hover:underline mt-1 font-semibold"
+                  >
+                    Clique aqui para digitar um número avulso
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Busca rápida de contato */}
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={searchContact}
+                      onChange={(e) => setSearchContact(e.target.value)}
+                      placeholder="Pesquisar contato por nome ou telefone..."
+                      className="w-full rounded-lg border border-emerald-500/20 bg-[#02140f] pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Lista de contatos rolável */}
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 divide-y divide-white/5">
+                    {filteredAlunos.length === 0 ? (
+                      <p className="text-center py-2 text-[11px] text-slate-400">
+                        Nenhum contato encontrado com este filtro.
+                      </p>
+                    ) : (
+                      filteredAlunos.map((aluno) => {
+                        const isSelected = selectedAlunoId === aluno.id;
+                        return (
+                          <div
+                            key={aluno.id}
+                            onClick={() => handleSelectAluno(aluno)}
+                            className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
+                              isSelected
+                                ? 'bg-emerald-500/20 border border-emerald-500/40 text-white'
+                                : 'hover:bg-white/5 text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="h-7 w-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-xs font-bold text-emerald-300 shrink-0">
+                                {aluno.nome.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-xs font-semibold truncate leading-tight">
+                                  {aluno.nome}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-mono">
+                                  {formatPhoneDisplay(aluno.telefone) || 'Sem telefone'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {isSelected && (
+                              <UserCheck className="h-4 w-4 text-emerald-400 shrink-0 ml-2" />
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {selectedAluno && (
+                    <div className="flex items-center justify-between pt-1 text-[11px] text-emerald-300 font-medium border-t border-white/5">
+                      <span>Selecionado: <strong>{selectedAluno.nome}</strong></span>
+                      <span className="font-mono text-cyan-300">
+                        {formatPhoneDisplay(selectedAluno.telefone)}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
+          )}
 
-            <div className="relative">
+          {/* Modo 2: Digitação de Número Avulso */}
+          {recipientMode === 'avulso' && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-300 font-medium">Telefone com DDD</span>
+                {cleanDigits.length >= 10 && (
+                  <span className="text-[11px] font-mono text-cyan-300">
+                    Formato: +{formattedWhatsAppNumber}
+                  </span>
+                )}
+              </div>
+
               <input
                 id="input-whatsapp-phone"
                 type="text"
                 value={phone}
-                onChange={handlePhoneChange}
-                placeholder="Ex: 5521999999999 ou (21) 98888-7777"
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Ex: 21999999999 ou (11) 98888-7777"
                 required
                 className="w-full rounded-xl border border-emerald-500/25 bg-[#02140f] px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 transition-all font-mono"
               />
-            </div>
 
-            {/* Aviso informativo de formato com código de país */}
-            <div className="flex items-start gap-1.5 text-[11px] text-slate-400 pt-0.5">
-              <Info className="h-3.5 w-3.5 text-cyan-400 shrink-0 mt-0.5" />
-              <span>
-                Recomendado: inclua o código do país e DDD (ex: <strong className="text-slate-200">5521999999999</strong>). 
-                Se omitido, o DDI <strong>55</strong> será aplicado automaticamente.
-              </span>
+              <div className="flex items-start gap-1.5 text-[11px] text-slate-400 pt-0.5">
+                <Info className="h-3.5 w-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                <span>
+                  O DDI <strong>+55 (Brasil)</strong> será aplicado automaticamente caso não digitado.
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Templates Rápidos (Presets) */}
           <div className="space-y-1.5 pt-1">
@@ -233,7 +399,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => setMessage(tpl.text)}
+                  onClick={() => applyTemplate(tpl.text)}
                   className="rounded-lg border border-emerald-500/20 bg-[#021813] px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-cyan-300 hover:border-cyan-400/40 hover:bg-[#03261e] active:scale-95 transition-all cursor-pointer"
                 >
                   {tpl.label}
@@ -261,27 +427,35 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
               rows={4}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Digite aqui o texto do desafio, convite ou aviso que deseja disparar..."
+              placeholder="Digite aqui o texto do desafio, convite ou aviso..."
               required
               className="w-full rounded-xl border border-emerald-500/25 bg-[#02140f] p-3 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 transition-all resize-none leading-relaxed"
             />
           </div>
 
-          {/* Preview da Mensagem */}
+          {/* Preview da Mensagem e URL gerada */}
           {message.trim() && (
-            <div className="rounded-xl border border-emerald-500/20 bg-[#021611] p-3 space-y-1">
+            <div className="rounded-xl border border-emerald-500/20 bg-[#021611] p-3 space-y-1.5">
               <div className="flex items-center justify-between text-[10px] text-slate-400 pb-1 border-b border-white/5">
                 <span className="text-emerald-400 font-bold flex items-center gap-1">
                   <Phone className="h-3 w-3" />
-                  Prévia no WhatsApp:
+                  Destino da Mensagem:
                 </span>
                 <span className="font-mono text-cyan-300">
-                  {cleanDigits ? formatPhoneDisplay(cleanDigits) : 'Destinatário'}
+                  {selectedAluno ? `${selectedAluno.nome} (${formatPhoneDisplay(activePhone)})` : cleanDigits ? formatPhoneDisplay(cleanDigits) : 'A definir'}
                 </span>
               </div>
-              <p className="text-xs text-slate-200 pt-1 italic whitespace-pre-wrap font-sans">
+              <p className="text-xs text-slate-200 pt-0.5 italic whitespace-pre-wrap font-sans">
                 &quot;{message.trim()}&quot;
               </p>
+              {cleanDigits && (
+                <div className="pt-1 flex items-center gap-1 text-[10px] text-slate-400 truncate font-mono">
+                  <ExternalLink className="h-3 w-3 text-emerald-400 shrink-0" />
+                  <span className="truncate">
+                    {getWhatsAppUrl(activePhone, message.trim())}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -291,8 +465,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
               type="button"
               id="btn-cancelar-mensagem-avulsa"
               onClick={onClose}
-              disabled={isLoading}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer disabled:opacity-50"
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
             >
               Cancelar
             </button>
@@ -301,20 +474,12 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
               type="button"
               id="btn-submeter-mensagem-avulsa"
               onClick={handleSend}
-              disabled={isLoading || !cleanDigits || !message.trim()}
+              disabled={!cleanDigits || !message.trim()}
               className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
-                  <span>Enviando WhatsApp...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 fill-slate-950 text-slate-950" />
-                  <span>Enviar WhatsApp</span>
-                </>
-              )}
+              <Send className="h-4 w-4 fill-slate-950 text-slate-950" />
+              <span>Abrir no WhatsApp</span>
+              <ExternalLink className="h-3.5 w-3.5 text-slate-950" />
             </button>
           </div>
         </form>

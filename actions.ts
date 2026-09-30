@@ -1,79 +1,63 @@
 /**
- * Disparo direto para Evolution API no lado do cliente (Vite / React SPA).
- * Lê as variáveis públicas do Vite:
- * - VITE_WHATSAPP_API_URL
- * - VITE_EVOLUTION_API_KEY (ou VITE_WHATSAPP_API_TOKEN como fallback)
- * - VITE_WHATSAPP_INSTANCE
+ * Disparo nativo de WhatsApp via Link Universal (wa.me / click-to-chat).
+ * Elimina totalmente dependências de gateways externos (Evolution API, Z-API),
+ * eliminando erros 504 Gateway Time-out, problemas de CORS e custos de API.
+ *
+ * Abre a conversa no WhatsApp Web ou App Desktop com o número formatado
+ * e a mensagem devidamente codificada com encodeURIComponent.
  */
-export async function sendWhatsAppAction(number: string, text: string) {
+import { formatWhatsAppNumber, getWhatsAppUrl } from './src/lib/whatsappUtils';
+
+export interface SendWhatsAppResult {
+  success: boolean;
+  error?: string;
+  url?: string;
+}
+
+export async function sendWhatsAppAction(
+  number: string,
+  text: string
+): Promise<SendWhatsAppResult> {
   try {
-    const apiUrl =
-      import.meta.env.VITE_WHATSAPP_API_URL ||
-      "https://api.personalcerto.com";
+    const cleanPhone = formatWhatsAppNumber(number);
 
-    const apiKey =
-      import.meta.env.VITE_EVOLUTION_API_KEY ||
-      import.meta.env.VITE_WHATSAPP_API_TOKEN ||
-      "";
-
-    const instance =
-      import.meta.env.VITE_WHATSAPP_INSTANCE ||
-      "whatsapp_principal";
-
-    if (!apiKey) {
-      console.warn("[WhatsApp Client] Chave de API não encontrada em import.meta.env.VITE_EVOLUTION_API_KEY");
+    if (!cleanPhone || cleanPhone.length < 10) {
       return {
         success: false,
-        error: "Chave de autenticação ausente. Configure VITE_EVOLUTION_API_KEY no seu arquivo .env.",
+        error: "Número de telefone inválido. Informe o número com DDD.",
       };
     }
 
-    let cleanNumber = (number || "").replace(/\D/g, "");
-    if (cleanNumber.length === 10 || cleanNumber.length === 11) {
-      cleanNumber = "55" + cleanNumber;
-    }
-
-    const endpoint = `${apiUrl.replace(/\/$/, "")}/message/sendText/${instance}`;
-
-    console.log(`[WhatsApp Client] Disparando fetch para: ${cleanNumber} | Endpoint: ${endpoint}`);
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": import.meta.env.VITE_EVOLUTION_API_KEY || apiKey,
-      },
-      body: JSON.stringify({
-        number: cleanNumber,
-        text: text,
-      }),
-    });
-
-    const responseText = await response.text();
-    console.log(`[WhatsApp Client] Resposta recebida da Evolution API - Status HTTP: ${response.status}`);
-
-    if (!response.ok) {
+    if (!text || !text.trim()) {
       return {
         success: false,
-        error: `Falha na Evolution API (${response.status}): ${responseText || response.statusText}`,
+        error: "Mensagem vazia. Digite um conteúdo para enviar.",
       };
     }
 
-    let data: any = null;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      data = null;
+    // Gera o link universal oficial wa.me devidamente codificado
+    const url = getWhatsAppUrl(cleanPhone, text.trim());
+
+    console.log(`[WhatsApp Link Universal] Abrindo conversa para: ${cleanPhone}`);
+
+    // Abre em nova janela/aba de forma nativa e segura
+    if (typeof window !== "undefined") {
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        // Caso popup seja bloqueado pelo navegador, tenta abrir na janela atual
+        window.location.href = url;
+      }
     }
 
-    return { success: true, data };
+    return {
+      success: true,
+      url,
+    };
   } catch (error: any) {
-    console.error("[WhatsApp Client] Erro no envio:", error);
+    console.error("[WhatsApp Link Universal] Erro ao abrir WhatsApp:", error);
     return {
       success: false,
-      error: error?.message?.includes("Failed to fetch")
-        ? "Falha na conexão com a Evolution API (Failed to fetch). Verifique se o CORS está liberado na Evolution API e se o cabeçalho apikey está correto."
-        : `Erro de rede: ${error?.message || error}`,
+      error: `Erro ao preparar link do WhatsApp: ${error?.message || error}`,
     };
   }
 }
