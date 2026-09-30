@@ -28,8 +28,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         number: cleanNumber,
-        options: { delay: 1000, presence: "composing" },
-        textMessage: { text }
+        text: text,
       }),
     });
 

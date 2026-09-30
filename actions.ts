@@ -2,31 +2,29 @@
  * Disparo direto para Evolution API no lado do cliente (Vite / React SPA).
  * Lê as variáveis públicas do Vite:
  * - VITE_WHATSAPP_API_URL
- * - VITE_WHATSAPP_API_TOKEN
+ * - VITE_EVOLUTION_API_KEY (ou VITE_WHATSAPP_API_TOKEN como fallback)
  * - VITE_WHATSAPP_INSTANCE
  */
 export async function sendWhatsAppAction(number: string, text: string) {
   try {
     const apiUrl =
-      (typeof import.meta !== "undefined" && import.meta.env?.VITE_WHATSAPP_API_URL) ||
-      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_API_URL) ||
-      "";
+      import.meta.env.VITE_WHATSAPP_API_URL ||
+      "https://api.personalcerto.com";
 
-    const apiToken =
-      (typeof import.meta !== "undefined" && import.meta.env?.VITE_WHATSAPP_API_TOKEN) ||
-      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_API_TOKEN) ||
+    const apiKey =
+      import.meta.env.VITE_EVOLUTION_API_KEY ||
+      import.meta.env.VITE_WHATSAPP_API_TOKEN ||
       "";
 
     const instance =
-      (typeof import.meta !== "undefined" && import.meta.env?.VITE_WHATSAPP_INSTANCE) ||
-      (typeof process !== "undefined" && process.env?.VITE_WHATSAPP_INSTANCE) ||
-      "";
+      import.meta.env.VITE_WHATSAPP_INSTANCE ||
+      "whatsapp_principal";
 
-    if (!apiUrl || !apiToken || !instance) {
-      console.warn("[WhatsApp Client] Faltam variáveis de ambiente (VITE_WHATSAPP_API_URL / VITE_WHATSAPP_API_TOKEN / VITE_WHATSAPP_INSTANCE)");
+    if (!apiKey) {
+      console.warn("[WhatsApp Client] Chave de API não encontrada em import.meta.env.VITE_EVOLUTION_API_KEY");
       return {
         success: false,
-        error: "Variáveis de ambiente (VITE_WHATSAPP_API_URL / TOKEN / INSTANCE) não configuradas no build do Vite.",
+        error: "Chave de autenticação ausente. Configure VITE_EVOLUTION_API_KEY no seu arquivo .env.",
       };
     }
 
@@ -43,7 +41,7 @@ export async function sendWhatsAppAction(number: string, text: string) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": apiToken,
+        "apikey": import.meta.env.VITE_EVOLUTION_API_KEY || apiKey,
       },
       body: JSON.stringify({
         number: cleanNumber,
@@ -74,7 +72,7 @@ export async function sendWhatsAppAction(number: string, text: string) {
     return {
       success: false,
       error: error?.message?.includes("Failed to fetch")
-        ? "Falha na conexão com a Evolution API (Failed to fetch). Verifique se o domínio possui certificado SSL (HTTPS) ou se o CORS está liberado."
+        ? "Falha na conexão com a Evolution API (Failed to fetch). Verifique se o CORS está liberado na Evolution API e se o cabeçalho apikey está correto."
         : `Erro de rede: ${error?.message || error}`,
     };
   }

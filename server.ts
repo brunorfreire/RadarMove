@@ -424,8 +424,7 @@ app.post('/api/whatsapp/send-message', async (req: Request, res: Response) => {
       },
       body: JSON.stringify({
         number: cleanNumber,
-        options: { delay: 1000, presence: 'composing' },
-        textMessage: { text: targetText },
+        text: targetText,
       }),
     });
 
