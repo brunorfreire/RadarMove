@@ -238,10 +238,10 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     }
     setToast(null);
 
-    if (!cleanDigits || cleanDigits.length < 8) {
+    if (!cleanDigits || cleanDigits.length < 10) {
       setToast({
         type: 'error',
-        text: 'Por favor, selecione um contato com telefone cadastrado ou informe um número com DDD.',
+        text: 'Número incompleto. Digite o DDD + telefone (mínimo 10 dígitos) para abrir o WhatsApp.',
       });
       return;
     }

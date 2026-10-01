@@ -63,7 +63,7 @@ export const SalvarTemplateModal: React.FC<SalvarTemplateModalProps> = ({
     .replace(/\{aluno_nome\}|\{aluno\}/g, 'Lucas')
     .replace(/\{treinador_nome\}|\{personal\}/g, (treinadorNome || 'Treinador').split(' ')[0]);
 
-  // Função de salvamento com persistência no Supabase
+  // Função de salvamento padronizada com personal_id para RLS
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro(null);
@@ -82,23 +82,24 @@ export const SalvarTemplateModal: React.FC<SalvarTemplateModalProps> = ({
     setSaving(true);
 
     try {
-      // 1. Obtém o usuário (personal trainer) autenticado
+      // 1. Obtém o ID do Personal Trainer autenticado
       const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id || null;
+      const personalId = session?.user?.id || null;
 
-      // 2. Prepara o payload para a tabela 'desafios_templates'
+      // 2. Prepara o payload padronizado com personal_id
       const templatePayload: Record<string, any> = {
         titulo: titulo.trim(),
         categoria,
         mensagem_whatsapp: mensagem.trim(),
         dificuldade,
         tempo_estimado: tempoEstimado.trim() || '2 min',
-        profissional_id: userId,
+        personal_id: personalId,
+        profissional_id: personalId, // Compatibilidade com schemas legados
       };
 
       let idGerado = `tpl-${Date.now()}`;
 
-      // 3. Salva no banco de dados via Supabase
+      // 3. Salva no banco de dados via Supabase (tabela desafios_templates e tabela templates)
       const { data, error } = await supabase
         .from('desafios_templates')
         .insert([templatePayload])
@@ -106,33 +107,44 @@ export const SalvarTemplateModal: React.FC<SalvarTemplateModalProps> = ({
         .maybeSingle();
 
       if (error) {
-        console.warn('[SalvarTemplateModal] Aviso ao gravar em desafios_templates:', error.message);
-        // Fallback para esquemas com colunas simplificadas
-        if (error.message?.includes('column') || error.message?.includes('schema cache')) {
-          const fallbackPayload = {
-            titulo: titulo.trim(),
-            categoria,
-            mensagem: mensagem.trim(),
-            profissional_id: userId,
-          };
-          const { data: fallbackData } = await supabase
-            .from('desafios_templates')
-            .insert([fallbackPayload])
-            .select()
-            .maybeSingle();
+        console.warn('[SalvarTemplateModal] Ajustando payload para o schema do banco:', error.message);
+        // Fallback caso tabela exija 'personal_id' ou 'conteudo'
+        const fallbackPayload: Record<string, any> = {
+          titulo: titulo.trim(),
+          categoria,
+          mensagem: mensagem.trim(),
+          personal_id: personalId,
+        };
+        const { data: fallbackData } = await supabase
+          .from('desafios_templates')
+          .insert([fallbackPayload])
+          .select()
+          .maybeSingle();
 
-          if (fallbackData?.id) {
-            idGerado = fallbackData.id;
-          }
+        if (fallbackData?.id) {
+          idGerado = fallbackData.id;
         }
       } else if (data?.id) {
         idGerado = data.id;
       }
 
+      // Também espelha na tabela 'templates' para uso imediato no modal de mensagem avulsa
+      try {
+        await supabase
+          .from('templates')
+          .insert([{
+            titulo: titulo.trim(),
+            mensagem: mensagem.trim(),
+            personal_id: personalId,
+          }]);
+      } catch (mirrorErr) {
+        // Tabela templates pode não existir ainda ou ter restrições, não bloqueia
+      }
+
       // 4. Cria o objeto do template formatado
       const novoTemplate: DesafioTemplate = {
         id: idGerado,
-        profissional_id: userId,
+        profissional_id: personalId,
         categoria,
         titulo: titulo.trim(),
         mensagem_whatsapp: mensagem.trim(),

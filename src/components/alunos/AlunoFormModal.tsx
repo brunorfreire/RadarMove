@@ -384,7 +384,7 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
 
           const profissionalId = user?.id || currentUserId;
 
-          // Inserção no Supabase com profissional_id explícito e colunas adicionais
+          // Inserção no Supabase com personal_id padronizado e profissional_id legado
           const insertPayload: Record<string, any> = {
             nome: nome.trim(),
             telefone: phoneFormatted,
@@ -393,6 +393,7 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             objetivos: finalObjetivos,
             status,
             plano,
+            personal_id: profissionalId,
             profissional_id: profissionalId,
           };
           if (dataNascimento) insertPayload.data_nascimento = dataNascimento;
@@ -448,6 +449,7 @@ export const AlunoFormModal: React.FC<AlunoFormModalProps> = ({
             const minimalPayload = {
               nome: nome.trim(),
               telefone: phoneFormatted,
+              personal_id: profissionalId,
               profissional_id: profissionalId,
             };
             const minRetry = await supabase.from('alunos').insert([minimalPayload]).select().maybeSingle();

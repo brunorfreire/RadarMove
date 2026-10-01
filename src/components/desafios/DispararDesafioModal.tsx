@@ -13,11 +13,12 @@ import {
   Clock, 
   Phone, 
   Calendar,
-  Loader2
+  CheckCircle2,
+  ChevronRight
 } from 'lucide-react';
-import { Aluno, DesafioTemplate, WhatsAppMensagem, DesafioEnviado } from '../../types';
+import { Aluno, DesafioTemplate, DesafioEnviado } from '../../types';
 import { verificarDesafioRepetido } from '../../lib/historicoDesafiosUtils';
-import { formatPhoneDisplay } from '../../lib/whatsappUtils';
+import { formatPhoneDisplay, formatWhatsAppNumber, isValidWhatsAppNumber } from '../../lib/whatsappUtils';
 
 interface DispararDesafioModalProps {
   isOpen: boolean;
@@ -28,7 +29,7 @@ interface DispararDesafioModalProps {
   onDisparoConcluido: (
     alunoIds: string[], 
     desafio: DesafioTemplate, 
-    customMessage: string,
+    customMessage: string, 
     abrirWhatsAppWeb: boolean
   ) => void;
   onAbrirAgendamento?: (desafio: DesafioTemplate, aluno?: Aluno) => void;
@@ -52,28 +53,30 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [customMessage, setCustomMessage] = useState(desafio.mensagem_whatsapp);
-  const [sentSuccess, setSentSuccess] = useState(false);
-  const [isSendingBackground, setIsSendingBackground] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Controle de disparos nativos já realizados na lista em lote durante a sessão
+  const [alunosEnviadosSet, setAlunosEnviadosSet] = useState<Set<string>>(new Set());
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const selectedAluno = alunos.find(a => a.id === selectedAlunoId) || alunos[0];
+  const selectedAluno = alunos.find((a) => a.id === selectedAlunoId) || alunos[0] || {
+    id: 'placeholder',
+    nome: 'Aluno Exemplo',
+    telefone: '11999999999',
+    status: 'ativo' as const,
+  };
 
+  // Verifica repetição no histórico
   const repeticaoIndividual = verificarDesafioRepetido(
     historico,
-    selectedAluno?.id || '',
+    selectedAluno.id,
     desafio.id,
     desafio.titulo
   );
-
-  const alunosRepetidosMassa = alunos.filter(a => {
-    if (!selectedMassaIds.includes(a.id)) return false;
-    return verificarDesafioRepetido(historico, a.id, desafio.id, desafio.titulo).repetido;
-  });
 
   const handleSelectApenasIneditos = () => {
     const ineditosIds = alunos
@@ -82,12 +85,12 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     setSelectedMassaIds(ineditosIds);
   };
 
-  // Helper to replace dynamic placeholders with actual student & personal trainer names
+  // Substitui dinamicamente {aluno_nome} e {treinador_nome}
   const getPreviewText = (templateText: string, alunoNome: string) => {
     const firstName = alunoNome ? alunoNome.split(' ')[0] : 'Aluno';
     return templateText
       .replace(/\{aluno_nome\}|\{aluno\}/g, firstName)
-      .replace(/\{treinador_nome\}|\{personal\}/g, 'Personal');
+      .replace(/\{treinador_nome\}|\{personal\}/g, 'Treinador');
   };
 
   const filteredAlunos = alunos.filter(a => 
@@ -109,78 +112,57 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     setSelectedMassaIds(alunos.map(a => a.id));
   };
 
-  const handleSend = async (enviarViaApi: boolean) => {
-    const targetIds = mode === 'individual' ? [selectedAluno.id] : selectedMassaIds;
-    if (targetIds.length === 0) return;
-    if (isSendingBackground) return;
-
-    if (enviarViaApi) {
-      setIsSendingBackground(true);
-      try {
-        if (mode === 'individual') {
-          const personalizedText = getPreviewText(customMessage, selectedAluno.nome);
-          const response = await fetch('/api/whatsapp/send', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              phone: selectedAluno.telefone,
-              message: personalizedText,
-            }),
-          });
-
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data?.error || data?.message || 'Falha ao enviar desafio via API');
-          }
-        } else {
-          // Disparo individual em lote para cada aluno selecionado
-          for (const aId of targetIds) {
-            const a = alunos.find((x) => x.id === aId);
-            if (a) {
-              const personalizedText = getPreviewText(customMessage, a.nome);
-              await fetch('/api/whatsapp/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  phone: a.telefone,
-                  message: personalizedText,
-                }),
-              });
-            }
-          }
-        }
-
-        showToast('Desafio enviado com sucesso!');
-        onDisparoConcluido(targetIds, desafio, customMessage, false);
-        setSentSuccess(true);
-        setTimeout(() => {
-          setSentSuccess(false);
-          onClose();
-        }, 1200);
-      } catch (err: any) {
-        console.error('[DispararDesafioModal] Erro ao enviar via API:', err);
-        showToast(err?.message || 'Erro ao disparar via API. Registrando no sistema...');
-        onDisparoConcluido(targetIds, desafio, customMessage, false);
-        setSentSuccess(true);
-        setTimeout(() => {
-          setSentSuccess(false);
-          onClose();
-        }, 1200);
-      } finally {
-        setIsSendingBackground(false);
-      }
-    } else {
-      // Apenas registrar no sistema sem chamar WhatsApp
-      onDisparoConcluido(targetIds, desafio, customMessage, false);
-      showToast('Desafio registrado no histórico com sucesso!');
-      setSentSuccess(true);
-      setTimeout(() => {
-        setSentSuccess(false);
-        onClose();
-      }, 1200);
+  // Disparo Individual Nativo via wa.me oficial
+  const handleDispararIndividualNativo = () => {
+    if (!selectedAluno.telefone) {
+      showToast('O aluno selecionado não possui telefone cadastrado.');
+      return;
     }
+
+    const clean = formatWhatsAppNumber(selectedAluno.telefone);
+    if (!isValidWhatsAppNumber(clean)) {
+      showToast('Telefone inválido ou sem DDD. Atualize o cadastro do aluno.');
+      return;
+    }
+
+    const personalizedText = getPreviewText(customMessage, selectedAluno.nome);
+    const waUrl = `https://wa.me/${clean}?text=${encodeURIComponent(personalizedText)}`;
+
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+
+    onDisparoConcluido([selectedAluno.id], desafio, customMessage, false);
+    showToast(`WhatsApp aberto para ${selectedAluno.nome.split(' ')[0]}!`);
+    setTimeout(() => {
+      onClose();
+    }, 1200);
+  };
+
+  // Disparo Individual para cada item da lista em Lote (100% nativo, sem bloqueio de popups)
+  const handleDispararAlunoDaFila = (alunoItem: Aluno) => {
+    const clean = formatWhatsAppNumber(alunoItem.telefone);
+    if (!isValidWhatsAppNumber(clean)) {
+      showToast(`Telefone de ${alunoItem.nome} está sem DDD ou incompleto.`);
+      return;
+    }
+
+    const personalizedText = getPreviewText(customMessage, alunoItem.nome);
+    const waUrl = `https://wa.me/${clean}?text=${encodeURIComponent(personalizedText)}`;
+
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+
+    setAlunosEnviadosSet(prev => new Set(prev).add(alunoItem.id));
+    onDisparoConcluido([alunoItem.id], desafio, customMessage, false);
+    showToast(`WhatsApp aberto para ${alunoItem.nome.split(' ')[0]}!`);
+  };
+
+  // Marcar todos os selecionados como registrados no histórico
+  const handleRegistrarHistoricoLote = () => {
+    if (selectedMassaIds.length === 0) return;
+    onDisparoConcluido(selectedMassaIds, desafio, customMessage, false);
+    showToast(`${selectedMassaIds.length} desafios registrados no histórico!`);
+    setTimeout(() => {
+      onClose();
+    }, 1000);
   };
 
   return (
@@ -190,236 +172,212 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     >
       <div 
         id="modal-disparar-desafio" 
-        className="w-full max-w-2xl rounded-2xl border border-emerald-500/30 bg-[#032019] shadow-2xl backdrop-blur-2xl relative flex flex-col max-h-[92vh] overflow-hidden text-slate-100"
+        className="w-full max-w-2xl rounded-3xl border border-emerald-500/30 bg-[#032019] shadow-2xl backdrop-blur-2xl relative flex flex-col max-h-[92vh] overflow-hidden text-slate-100"
       >
         {/* Glow ambient background */}
         <div className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-cyan-400/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 -left-20 h-52 w-52 rounded-full bg-emerald-500/10 blur-3xl" />
 
-        {/* Modal Header (Fixed at top) */}
+        {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-emerald-500/20 px-5 sm:px-6 py-4 bg-[#021813]/90 flex-shrink-0 z-10">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/20 text-cyan-300 border border-cyan-400/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 font-black shadow-lg shadow-emerald-500/20">
               <Send className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-white tracking-tight">
-                Disparar: {desafio.titulo}
-              </h3>
-              <p className="text-xs text-slate-400">
-                Categoria: <span className="text-cyan-300 font-semibold">{desafio.categoria}</span> • {desafio.dificuldade}
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-base text-white">Disparar Micro-Desafio</h3>
+                <span className="rounded bg-emerald-400/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-400/30">
+                  wa.me 100% nativo
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 truncate max-w-md">
+                Desafio: <span className="text-slate-200 font-semibold">{desafio.titulo}</span> ({desafio.categoria})
               </p>
             </div>
           </div>
 
           <button
             type="button"
+            id="btn-fechar-disparar-desafio"
             onClick={onClose}
-            className="rounded-xl p-2 text-slate-400 hover:bg-white/5 hover:text-white transition-all cursor-pointer"
-            title="Fechar"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/20 bg-[#021813] text-slate-400 hover:text-white hover:border-emerald-500/50 transition-all cursor-pointer"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Scrollable Modal Body */}
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4">
-          {/* Mode Selector Tabs */}
-          <div className="flex items-center gap-2 p-1 bg-[#021510] rounded-xl border border-emerald-500/20">
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+          {/* Seletor de Modo: Individual vs Em Lote */}
+          <div className="flex items-center justify-between bg-[#01140f] p-1.5 rounded-2xl border border-emerald-500/20">
             <button
               type="button"
               onClick={() => setMode('individual')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 mode === 'individual'
-                  ? 'bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 shadow-md'
+                  ? 'bg-gradient-to-r from-emerald-500/30 to-teal-500/30 text-emerald-300 border border-emerald-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <User className="h-3.5 w-3.5" />
-              Disparo Individual (1 Aluno)
+              <User className="h-4 w-4" />
+              <span>Envio Individual</span>
             </button>
+
             <button
               type="button"
               onClick={() => setMode('massa')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 mode === 'massa'
-                  ? 'bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 shadow-md'
+                  ? 'bg-gradient-to-r from-emerald-500/30 to-teal-500/30 text-emerald-300 border border-emerald-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Users className="h-3.5 w-3.5" />
-              Disparo em Massa / Transmissão
+              <Users className="h-4 w-4" />
+              <span>Envio em Lote / Fila ({selectedMassaIds.length} selecionados)</span>
             </button>
           </div>
 
-          {/* Target Selection */}
-          {mode === 'individual' ? (
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
-                Selecione o Aluno de Destino:
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto pr-1">
-                {alunos.map((a) => {
-                  const isSelected = a.id === selectedAluno?.id;
-                  const st = verificarDesafioRepetido(historico, a.id, desafio.id, desafio.titulo);
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => setSelectedAlunoId(a.id)}
-                      className={`flex items-center gap-2 p-2 rounded-xl text-left text-xs transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-2 border-cyan-400 bg-cyan-400/15 text-white font-bold shadow-sm'
-                          : 'border border-emerald-500/20 bg-[#021813] text-slate-300 hover:border-emerald-500/40'
-                      }`}
-                    >
-                      <div className="relative h-6 w-6 rounded-md overflow-hidden bg-emerald-950 flex-shrink-0">
-                        {a.avatar_url ? (
-                          <img src={a.avatar_url} alt={a.nome} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-cyan-300">
-                            {a.nome.charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="truncate flex-1">
-                        <div className="truncate">{a.nome}</div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {st.repetido ? (
-                            <span className="text-[9px] text-amber-300 font-bold bg-amber-400/15 px-1 rounded">
-                              ⚠️ Já enviado ({st.totalEnvios}x)
-                            </span>
-                          ) : (
-                            <span className="text-[9px] text-emerald-400 font-medium">
-                              ✓ Inédito
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Status Warning for Individual Selected Student */}
-              {repeticaoIndividual.repetido ? (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2.5 flex items-start gap-2.5 text-amber-200 animate-in fade-in">
-                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div className="text-xs">
-                    <span className="font-bold text-amber-300">
-                      Atenção: Desafio Já Enviado para {selectedAluno.nome.split(' ')[0]} ({repeticaoIndividual.totalEnvios}x no histórico)
-                    </span>
-                    <p className="text-[11px] text-amber-200/90 mt-0.5">
-                      Último envio em {repeticaoIndividual.ultimoEnvio?.data_formatada || 'data anterior'} ({repeticaoIndividual.diasDesdeUltimoEnvio === 0 ? 'hoje' : `há ${repeticaoIndividual.diasDesdeUltimoEnvio} dia(s)`}). Você pode reenviar para reforçar ou selecionar outro aluno/desafio.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-2 text-xs text-emerald-300 flex items-center gap-2">
-                  <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                  <span>Desafio inédito para {selectedAluno.nome.split(' ')[0]} (nunca enviado anteriormente).</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between flex-wrap gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Selecione os Alunos ({selectedMassaIds.length} selecionados):
+          {/* MODO INDIVIDUAL */}
+          {mode === 'individual' && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block mb-1.5">
+                  Selecione o Aluno:
                 </label>
-                <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-                  <button
-                    type="button"
-                    onClick={handleSelectApenasIneditos}
-                    className="text-emerald-400 hover:underline font-semibold cursor-pointer"
-                  >
-                    Apenas inéditos
-                  </button>
-                  <span className="text-slate-600">•</span>
-                  <button
-                    type="button"
-                    onClick={handleSelectAllEmRisco}
-                    className="text-rose-400 hover:underline font-semibold cursor-pointer"
-                  >
-                    Todos em risco
-                  </button>
-                  <span className="text-slate-600">•</span>
-                  <button
-                    type="button"
-                    onClick={handleSelectAllAtivos}
-                    className="text-cyan-300 hover:underline font-semibold cursor-pointer"
-                  >
-                    Selecionar todos
-                  </button>
-                </div>
+                <select
+                  value={selectedAlunoId}
+                  onChange={(e) => setSelectedAlunoId(e.target.value)}
+                  className="w-full rounded-xl border border-emerald-500/30 bg-[#01140f] px-3.5 py-2.5 text-xs sm:text-sm text-white focus:border-cyan-400 focus:outline-none transition-all cursor-pointer"
+                >
+                  {alunos.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nome} {a.status === 'em_risco' ? '⚠️ (Em Risco)' : ''} - {formatPhoneDisplay(a.telefone)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Repetition Warning in Mass Mode */}
-              {alunosRepetidosMassa.length > 0 && (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-200 flex items-start gap-2">
+              {/* Alerta de Repetição */}
+              {repeticaoIndividual.repetido && (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex items-start gap-3 text-xs text-amber-200">
                   <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold text-amber-300">
-                      {alunosRepetidosMassa.length} dos {selectedMassaIds.length} selecionados já receberam este desafio:
-                    </span>
-                    <p className="text-[11px] text-amber-200/90 mt-0.5">
-                      {alunosRepetidosMassa.map(a => a.nome.split(' ')[0]).join(', ')}
+                    <p className="font-bold">Atenção: Desafio já enviado para este aluno!</p>
+                    <p className="text-[11px] text-amber-300/80 mt-0.5">
+                      Este aluno já recebeu este desafio {repeticaoIndividual.totalEnvios}x (último em {repeticaoIndividual.ultimoEnvio?.data_formatada || 'data anterior'}).
                     </p>
                   </div>
                 </div>
               )}
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto pr-1">
-                {alunos.map((a) => {
-                  const isSelected = selectedMassaIds.includes(a.id);
-                  const st = verificarDesafioRepetido(historico, a.id, desafio.id, desafio.titulo);
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => handleToggleMassaAluno(a.id)}
-                      className={`flex items-center justify-between p-2 rounded-xl text-left text-xs transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-2 border-emerald-400 bg-emerald-500/15 text-white font-bold'
-                          : 'border border-emerald-500/20 bg-[#021813] text-slate-400 hover:border-emerald-500/40'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <div className="h-6 w-6 rounded-md overflow-hidden bg-emerald-950 flex-shrink-0">
-                          {a.avatar_url ? (
-                            <img src={a.avatar_url} alt={a.nome} className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-cyan-300">
-                              {a.nome.charAt(0)}
-                            </div>
-                          )}
-                        </div>
-                        <div className="truncate">
-                          <span className="truncate block">{a.nome.split(' ')[0]}</span>
-                          {st.repetido && (
-                            <span className="text-[9px] text-amber-300 font-bold block">
-                              ⚠️ Já recebeu
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {isSelected && <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           )}
 
-          {/* Message Editor with Tag Replacement */}
-          <div className="space-y-2">
+          {/* MODO EM LOTE / FILA NATIVA */}
+          {mode === 'massa' && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                  Selecione os Alunos para a Fila de Disparo:
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllEmRisco}
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all font-semibold"
+                  >
+                    Apenas Em Risco
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSelectApenasIneditos}
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all font-semibold"
+                  >
+                    Apenas Inéditos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllAtivos}
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 transition-all font-semibold"
+                  >
+                    Todos ({alunos.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Lista Selecionável */}
+              <div className="max-h-44 overflow-y-auto rounded-2xl border border-emerald-500/20 bg-[#01140f] p-2 space-y-1 divide-y divide-white/5">
+                {alunos.map((aluno) => {
+                  const isChecked = selectedMassaIds.includes(aluno.id);
+                  const isSentInSession = alunosEnviadosSet.has(aluno.id);
+
+                  return (
+                    <div
+                      key={aluno.id}
+                      className={`flex items-center justify-between p-2 rounded-xl text-xs transition-all ${
+                        isChecked ? 'bg-emerald-500/10 text-white' : 'text-slate-400'
+                      }`}
+                    >
+                      <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleMassaAluno(aluno.id)}
+                          className="h-4 w-4 rounded border-emerald-500/40 text-emerald-500 focus:ring-0 bg-[#021813] cursor-pointer"
+                        />
+                        <span className="font-semibold truncate">{aluno.nome}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {formatPhoneDisplay(aluno.telefone)}
+                        </span>
+                      </label>
+
+                      {/* Botão de Envio 1-Clique Nativo para este aluno */}
+                      {isChecked && (
+                        <button
+                          type="button"
+                          onClick={() => handleDispararAlunoDaFila(aluno)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer shadow-sm ${
+                            isSentInSession
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:brightness-110 active:scale-95'
+                          }`}
+                        >
+                          {isSentInSession ? (
+                            <>
+                              <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                              <span>Enviado</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Abrir wa.me</span>
+                              <ChevronRight className="h-3 w-3" />
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-cyan-400 shrink-0" />
+                <span>
+                  O navegador protege contra spam abrindo abas apenas com o seu clique direto. Use os botões <strong>Abrir wa.me</strong> acima para cada aluno da fila.
+                </span>
+              </p>
+            </div>
+          )}
+
+          {/* Campo da Mensagem */}
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <MessageSquare className="h-3.5 w-3.5 text-cyan-400" />
-                Editar Mensagem antes de enviar:
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
+                Mensagem a Ser Disparada:
               </label>
-              <span className="text-[10px] text-slate-400">
-                Use <code className="text-cyan-300 font-mono">{'{aluno}'}</code> para personalizar
+              <span className="text-[10px] text-slate-400 font-mono">
+                {customMessage.length} caracteres
               </span>
             </div>
 
@@ -427,150 +385,84 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
               rows={3}
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
-              className="w-full rounded-xl border border-emerald-500/25 bg-[#02140f] p-3 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none resize-none"
+              className="w-full rounded-2xl border border-emerald-500/30 bg-[#01140f] p-3 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none transition-all resize-none leading-relaxed"
             />
           </div>
 
-          {/* WhatsApp Preview Bubble */}
-          <div className="rounded-xl border border-emerald-500/20 bg-[#021611] p-3 space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-slate-500 pb-1 border-b border-white/5">
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <Phone className="h-3 w-3" />
-                Prévia real que {mode === 'individual' ? selectedAluno.nome.split(' ')[0] : 'o aluno'} receberá:
-              </span>
-              <span>WhatsApp Web</span>
-            </div>
-            <p className="text-xs text-slate-200 pt-1 italic whitespace-pre-wrap font-sans">
-              "{getPreviewText(customMessage, mode === 'individual' ? selectedAluno.nome : 'João')}"
+          {/* Prévia da Mensagem */}
+          <div className="rounded-2xl border border-emerald-500/20 bg-[#011611] p-3 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Prévia com Nome Dinâmico ({mode === 'individual' ? selectedAluno.nome.split(' ')[0] : 'Nome do Aluno'}):
+            </span>
+            <p className="text-xs text-slate-200 italic font-sans leading-relaxed">
+              &quot;{getPreviewText(customMessage, mode === 'individual' ? selectedAluno.nome : 'Lucas')}&quot;
             </p>
           </div>
         </div>
 
-        {/* ALWAYS VISIBLE / STICKY ACTION FOOTER (PINNED AT THE BOTTOM) */}
-        <div 
-          id="modal-disparar-desafio-footer" 
-          className="px-5 sm:px-6 py-3.5 border-t border-emerald-500/30 bg-[#02140f] flex-shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xl z-20"
-        >
-          {/* Recipient status info */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            {sentSuccess ? (
-              <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs animate-in fade-in">
-                <Check className="h-4 w-4" />
-                <span>Desafio disparado com sucesso!</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-xs text-slate-300">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                {mode === 'individual' ? (
-                  <span className="truncate">
-                    Destinatário: <strong className="text-white">{selectedAluno.nome}</strong> ({formatPhoneDisplay(selectedAluno.telefone)})
-                  </span>
-                ) : (
-                  <span>
-                    Destino: <strong className="text-cyan-300">{selectedMassaIds.length} alunos</strong> selecionados
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Action buttons (Always clearly visible and prominent) */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <button
-              type="button"
-              id="btn-cancelar-disparo"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-            >
-              Cancelar
-            </button>
-
+        {/* Modal Footer */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-emerald-500/20 bg-[#021813]/90 px-5 sm:px-6 py-4 flex-shrink-0 z-10">
+          <div className="flex items-center gap-2">
             {onAbrirAgendamento && (
               <button
                 type="button"
-                id="btn-abrir-agendamento-modal"
                 onClick={() => {
                   onClose();
-                  onAbrirAgendamento(desafio, selectedAluno);
+                  onAbrirAgendamento(desafio, mode === 'individual' ? selectedAluno : undefined);
                 }}
-                title="Programar data e hora para disparo automático via WhatsApp"
-                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-xs font-bold text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 active:scale-95 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-cyan-500/30 bg-cyan-950/30 text-xs font-bold text-cyan-300 hover:bg-cyan-900/40 transition-all cursor-pointer"
               >
-                <Calendar className="h-3.5 w-3.5" />
-                <span>Agendar Envio</span>
+                <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+                <span>Agendar Desafio</span>
               </button>
             )}
+          </div>
 
+          <div className="flex items-center gap-2.5">
             {mode === 'individual' ? (
               <>
                 <button
                   type="button"
-                  id="btn-registrar-apenas"
-                  onClick={() => handleSend(false)}
-                  title="Salva o envio no histórico do aluno sem abrir o WhatsApp Web"
+                  onClick={() => {
+                    onDisparoConcluido([selectedAluno.id], desafio, customMessage, false);
+                    showToast('Desafio registrado no histórico!');
+                    setTimeout(() => onClose(), 1000);
+                  }}
                   className="px-3.5 py-2.5 rounded-xl border border-emerald-500/30 bg-[#021813] text-xs font-bold text-emerald-300 hover:bg-[#03241c] hover:border-emerald-400 active:scale-95 transition-all cursor-pointer"
                 >
-                  Registrar no Sistema
+                  Apenas Registrar
                 </button>
 
                 <button
                   type="button"
-                  id="btn-enviar-whatsapp-direto"
-                  onClick={() => handleSend(true)}
-                  disabled={isSendingBackground}
-                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg active:scale-95 transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
-                    repeticaoIndividual.repetido
-                      ? 'bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 shadow-amber-500/20 hover:brightness-110'
-                      : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 shadow-emerald-500/30 hover:brightness-110'
-                  }`}
+                  id="btn-disparar-whatsapp-individual-nativo"
+                  onClick={handleDispararIndividualNativo}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
                 >
-                  {isSendingBackground ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
-                      <span>Enviando em segundo plano...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 text-slate-950 fill-slate-950" />
-                      <span>
-                        {repeticaoIndividual.repetido
-                          ? `Reenviar via WhatsApp (${selectedAluno.nome.split(' ')[0]})`
-                          : `Enviar via WhatsApp (${selectedAluno.nome.split(' ')[0]})`}
-                      </span>
-                    </>
-                  )}
+                  <Send className="h-4 w-4" />
+                  <span>Abrir WhatsApp ({selectedAluno.nome.split(' ')[0]})</span>
+                  <ExternalLink className="h-3.5 w-3.5" />
                 </button>
               </>
             ) : (
               <button
                 type="button"
-                id="btn-disparar-em-massa"
-                onClick={() => handleSend(true)}
-                disabled={selectedMassaIds.length === 0 || isSendingBackground}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-6 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleRegistrarHistoricoLote}
+                disabled={selectedMassaIds.length === 0}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isSendingBackground ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
-                    <span>Disparando em massa...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 text-slate-950 fill-slate-950" />
-                    <span>Disparar para {selectedMassaIds.length} Alunos</span>
-                  </>
-                )}
+                <Check className="h-4 w-4 stroke-[3]" />
+                <span>Finalizar & Salvar Histórico ({selectedMassaIds.length})</span>
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Toast Notification no Modal */}
+      {/* Toast Notification */}
       {toastMessage && (
         <div
           role="status"
-          aria-live="polite"
           className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl border border-emerald-500/30 bg-[#021813] px-4 py-3 text-xs font-semibold text-emerald-300 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-200"
         >
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">

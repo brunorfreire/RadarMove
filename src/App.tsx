@@ -140,12 +140,24 @@ export default function App() {
           }
         }
 
-        // B. Carrega Alunos do treinador logado (filtrado por profissional_id)
-        const { data: alunosData } = await supabase
+        // B. Carrega Alunos do treinador logado (padronizado com personal_id e fallback)
+        let alunosData: any[] | null = null;
+        const { data: pData, error: pErr } = await supabase
           .from('alunos')
           .select('*')
-          .eq('profissional_id', userId)
+          .eq('personal_id', userId)
           .order('nome', { ascending: true });
+
+        if (!pErr && pData) {
+          alunosData = pData;
+        } else {
+          const { data: profDataLegacy } = await supabase
+            .from('alunos')
+            .select('*')
+            .eq('profissional_id', userId)
+            .order('nome', { ascending: true });
+          alunosData = profDataLegacy || [];
+        }
 
         const alunosList: Aluno[] = (alunosData || []).map((a: any) => {
           let objetivosArr: string[] = [];
@@ -195,12 +207,24 @@ export default function App() {
           setLeads([]);
         }
 
-        // D. Carrega Desafios Templates (globais do sistema ou criados pelo profissional)
-        const { data: templatesData } = await supabase
+        // D. Carrega Desafios Templates (globais do sistema ou criados pelo personal logado)
+        let templatesData: any[] | null = null;
+        const { data: tplPersonal, error: tplErr } = await supabase
           .from('desafios_templates')
           .select('*')
-          .or(`profissional_id.is.null,profissional_id.eq.${userId}`)
+          .or(`personal_id.is.null,personal_id.eq.${userId}`)
           .order('categoria', { ascending: true });
+
+        if (!tplErr && tplPersonal && tplPersonal.length > 0) {
+          templatesData = tplPersonal;
+        } else {
+          const { data: tplProf } = await supabase
+            .from('desafios_templates')
+            .select('*')
+            .or(`profissional_id.is.null,profissional_id.eq.${userId}`)
+            .order('categoria', { ascending: true });
+          templatesData = tplProf || [];
+        }
 
         if (templatesData && templatesData.length > 0) {
           const dbTemplates: DesafioTemplate[] = templatesData.map((t: any) => ({
@@ -401,6 +425,7 @@ export default function App() {
           objetivos: objArray,
           status: novoAluno.status || 'ativo',
           plano: novoAluno.plano || 'Presencial VIP 3x/semana',
+          personal_id: currentUserId,
           profissional_id: currentUserId,
         };
         if (novoAluno.avatar_url) {
@@ -496,8 +521,7 @@ export default function App() {
         let { error: updateError } = await supabase
           .from('alunos')
           .update(currentUpdate)
-          .eq('id', alunoAtualizado.id)
-          .eq('profissional_id', session.user.id);
+          .eq('id', alunoAtualizado.id);
 
         let updateAttempts = 0;
         while (updateError && (updateError.message?.includes('column') || updateError.message?.includes('schema cache')) && updateAttempts < 10) {

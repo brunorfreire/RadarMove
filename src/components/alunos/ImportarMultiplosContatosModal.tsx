@@ -191,6 +191,7 @@ export const ImportarMultiplosContatosModal: React.FC<ImportarMultiplosContatosM
         nome: item.nome.trim() || 'Sem Nome',
         telefone: item.telefoneDigits || '',
         status: item.status || 'ativo',
+        personal_id: currentUserId,
         profissional_id: currentUserId,
         objetivos: item.objetivos && item.objetivos.length > 0 ? item.objetivos : ['Geral'],
         objetivo: (item.objetivos && item.objetivos.length > 0 ? item.objetivos : ['Geral']).join(', '),
@@ -210,6 +211,7 @@ export const ImportarMultiplosContatosModal: React.FC<ImportarMultiplosContatosM
           nome: item.nome.trim() || 'Sem Nome',
           telefone: item.telefoneDigits || '',
           status: 'ativo',
+          personal_id: currentUserId,
           profissional_id: currentUserId,
           objetivo: 'Geral',
         }));
@@ -223,6 +225,7 @@ export const ImportarMultiplosContatosModal: React.FC<ImportarMultiplosContatosM
           const minimalAlunos = selecionados.map((item) => ({
             nome: item.nome.trim() || 'Sem Nome',
             telefone: item.telefoneDigits || '',
+            personal_id: currentUserId,
             profissional_id: currentUserId,
           }));
           const minRetry = await supabase.from('alunos').insert(minimalAlunos).select();
