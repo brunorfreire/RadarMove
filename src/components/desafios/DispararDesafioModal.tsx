@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Send, 
@@ -14,11 +14,16 @@ import {
   Phone, 
   Calendar,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  History,
+  ShieldCheck,
+  RefreshCw,
+  Info
 } from 'lucide-react';
 import { Aluno, DesafioTemplate, DesafioEnviado } from '../../types';
-import { verificarDesafioRepetido } from '../../lib/historicoDesafiosUtils';
+import { verificarDesafioRepetido, formatDataAmigavel } from '../../lib/historicoDesafiosUtils';
 import { formatPhoneDisplay, formatWhatsAppNumber, isValidWhatsAppNumber } from '../../lib/whatsappUtils';
+import { salvarHistoricoDesafioSupabase } from '../../lib/historicoDesafiosService';
 
 interface DispararDesafioModalProps {
   isOpen: boolean;
@@ -54,9 +59,17 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [customMessage, setCustomMessage] = useState(desafio.mensagem_whatsapp);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSavingSupabase, setIsSavingSupabase] = useState(false);
 
   // Controle de disparos nativos já realizados na lista em lote durante a sessão
   const [alunosEnviadosSet, setAlunosEnviadosSet] = useState<Set<string>>(new Set());
+
+  // Atualiza a mensagem ao trocar o template
+  useEffect(() => {
+    if (desafio) {
+      setCustomMessage(desafio.mensagem_whatsapp);
+    }
+  }, [desafio]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -70,7 +83,7 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     status: 'ativo' as const,
   };
 
-  // Verifica repetição no histórico
+  // Verifica repetição no histórico (seja por ID ou por título)
   const repeticaoIndividual = verificarDesafioRepetido(
     historico,
     selectedAluno.id,
@@ -93,10 +106,6 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
       .replace(/\{treinador_nome\}|\{personal\}/g, 'Treinador');
   };
 
-  const filteredAlunos = alunos.filter(a => 
-    a.nome.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   const handleToggleMassaAluno = (id: string) => {
     setSelectedMassaIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -112,8 +121,8 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     setSelectedMassaIds(alunos.map(a => a.id));
   };
 
-  // Disparo Individual Nativo via wa.me oficial
-  const handleDispararIndividualNativo = () => {
+  // Disparo Individual Nativo: Salva no Supabase e abre o WhatsApp wa.me
+  const handleDispararIndividualNativo = async () => {
     if (!selectedAluno.telefone) {
       showToast('O aluno selecionado não possui telefone cadastrado.');
       return;
@@ -128,17 +137,38 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     const personalizedText = getPreviewText(customMessage, selectedAluno.nome);
     const waUrl = `https://wa.me/${clean}?text=${encodeURIComponent(personalizedText)}`;
 
+    // 1. Abre a aba do wa.me nativamente
     window.open(waUrl, '_blank', 'noopener,noreferrer');
 
+    // 2. Persiste imediatamente no Supabase (tabela historico_desafios com personal_id)
+    setIsSavingSupabase(true);
+    try {
+      await salvarHistoricoDesafioSupabase({
+        alunoId: selectedAluno.id,
+        alunoNome: selectedAluno.nome,
+        desafioId: desafio.id,
+        desafioTitulo: desafio.titulo,
+        categoria: desafio.categoria,
+        dificuldade: desafio.dificuldade,
+        tempoEstimado: desafio.tempo_estimado,
+        mensagemEnviada: personalizedText,
+      });
+    } catch (err) {
+      console.warn('[DispararDesafioModal] Erro ao persistir historico_desafios:', err);
+    } finally {
+      setIsSavingSupabase(false);
+    }
+
+    // 3. Atualiza estado global do app e fecha modal
     onDisparoConcluido([selectedAluno.id], desafio, customMessage, false);
-    showToast(`WhatsApp aberto para ${selectedAluno.nome.split(' ')[0]}!`);
+    showToast(`WhatsApp aberto e histórico registrado no Supabase para ${selectedAluno.nome.split(' ')[0]}!`);
     setTimeout(() => {
       onClose();
     }, 1200);
   };
 
-  // Disparo Individual para cada item da lista em Lote (100% nativo, sem bloqueio de popups)
-  const handleDispararAlunoDaFila = (alunoItem: Aluno) => {
+  // Disparo Individual para cada item da lista em Lote
+  const handleDispararAlunoDaFila = async (alunoItem: Aluno) => {
     const clean = formatWhatsAppNumber(alunoItem.telefone);
     if (!isValidWhatsAppNumber(clean)) {
       showToast(`Telefone de ${alunoItem.nome} está sem DDD ou incompleto.`);
@@ -148,18 +178,72 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     const personalizedText = getPreviewText(customMessage, alunoItem.nome);
     const waUrl = `https://wa.me/${clean}?text=${encodeURIComponent(personalizedText)}`;
 
+    // Abre wa.me
     window.open(waUrl, '_blank', 'noopener,noreferrer');
+
+    // Salva no Supabase
+    salvarHistoricoDesafioSupabase({
+      alunoId: alunoItem.id,
+      alunoNome: alunoItem.nome,
+      desafioId: desafio.id,
+      desafioTitulo: desafio.titulo,
+      categoria: desafio.categoria,
+      dificuldade: desafio.dificuldade,
+      tempoEstimado: desafio.tempo_estimado,
+      mensagemEnviada: personalizedText,
+    });
 
     setAlunosEnviadosSet(prev => new Set(prev).add(alunoItem.id));
     onDisparoConcluido([alunoItem.id], desafio, customMessage, false);
     showToast(`WhatsApp aberto para ${alunoItem.nome.split(' ')[0]}!`);
   };
 
-  // Marcar todos os selecionados como registrados no histórico
-  const handleRegistrarHistoricoLote = () => {
+  // Salvar no histórico sem abrir WhatsApp (ex: quando o personal já mandou manualmente)
+  const handleApenasRegistrar = async () => {
+    setIsSavingSupabase(true);
+    const personalizedText = getPreviewText(customMessage, selectedAluno.nome);
+    try {
+      await salvarHistoricoDesafioSupabase({
+        alunoId: selectedAluno.id,
+        alunoNome: selectedAluno.nome,
+        desafioId: desafio.id,
+        desafioTitulo: desafio.titulo,
+        categoria: desafio.categoria,
+        dificuldade: desafio.dificuldade,
+        tempoEstimado: desafio.tempo_estimado,
+        mensagemEnviada: personalizedText,
+      });
+    } finally {
+      setIsSavingSupabase(false);
+    }
+
+    onDisparoConcluido([selectedAluno.id], desafio, customMessage, false);
+    showToast('Desafio registrado no histórico do Supabase!');
+    setTimeout(() => onClose(), 1000);
+  };
+
+  // Marcar todos os selecionados em lote como registrados no histórico
+  const handleRegistrarHistoricoLote = async () => {
     if (selectedMassaIds.length === 0) return;
+
+    for (const aId of selectedMassaIds) {
+      const a = alunos.find(x => x.id === aId);
+      if (a) {
+        salvarHistoricoDesafioSupabase({
+          alunoId: a.id,
+          alunoNome: a.nome,
+          desafioId: desafio.id,
+          desafioTitulo: desafio.titulo,
+          categoria: desafio.categoria,
+          dificuldade: desafio.dificuldade,
+          tempoEstimado: desafio.tempo_estimado,
+          mensagemEnviada: getPreviewText(customMessage, a.nome),
+        });
+      }
+    }
+
     onDisparoConcluido(selectedMassaIds, desafio, customMessage, false);
-    showToast(`${selectedMassaIds.length} desafios registrados no histórico!`);
+    showToast(`${selectedMassaIds.length} desafios registrados no histórico com sucesso!`);
     setTimeout(() => {
       onClose();
     }, 1000);
@@ -188,7 +272,7 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
               <div className="flex items-center gap-2">
                 <h3 className="font-extrabold text-base text-white">Disparar Micro-Desafio</h3>
                 <span className="rounded bg-emerald-400/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-400/30">
-                  wa.me 100% nativo
+                  wa.me + Supabase RLS
                 </span>
               </div>
               <p className="text-xs text-slate-400 truncate max-w-md">
@@ -242,30 +326,57 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
           {mode === 'individual' && (
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block mb-1.5">
-                  Selecione o Aluno:
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Selecione o Aluno:
+                  </label>
+                  {repeticaoIndividual.repetido ? (
+                    <span className="flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+                      <History className="h-3 w-3" />
+                      Já enviado em {repeticaoIndividual.ultimoEnvio?.data_formatada || formatDataAmigavel(repeticaoIndividual.ultimoEnvio?.data_envio || '')}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <ShieldCheck className="h-3 w-3" />
+                      Desafio Inédito para este Aluno
+                    </span>
+                  )}
+                </div>
+
                 <select
                   value={selectedAlunoId}
                   onChange={(e) => setSelectedAlunoId(e.target.value)}
                   className="w-full rounded-xl border border-emerald-500/30 bg-[#01140f] px-3.5 py-2.5 text-xs sm:text-sm text-white focus:border-cyan-400 focus:outline-none transition-all cursor-pointer"
                 >
-                  {alunos.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nome} {a.status === 'em_risco' ? '⚠️ (Em Risco)' : ''} - {formatPhoneDisplay(a.telefone)}
-                    </option>
-                  ))}
+                  {alunos.map((a) => {
+                    const checkRepetido = verificarDesafioRepetido(historico, a.id, desafio.id, desafio.titulo);
+                    return (
+                      <option key={a.id} value={a.id}>
+                        {a.nome} {checkRepetido.repetido ? `[Enviado ${checkRepetido.totalEnvios}x]` : '[Inédito]'} - {formatPhoneDisplay(a.telefone)}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
-              {/* Alerta de Repetição */}
+              {/* Alerta Visual de Repetição Amigável */}
               {repeticaoIndividual.repetido && (
-                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex items-start gap-3 text-xs text-amber-200">
-                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold">Atenção: Desafio já enviado para este aluno!</p>
-                    <p className="text-[11px] text-amber-300/80 mt-0.5">
-                      Este aluno já recebeu este desafio {repeticaoIndividual.totalEnvios}x (último em {repeticaoIndividual.ultimoEnvio?.data_formatada || 'data anterior'}).
+                <div className="rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-500/15 via-amber-950/20 to-transparent p-4 flex items-start gap-3.5 text-xs text-amber-200 shadow-md">
+                  <div className="h-8 w-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-extrabold text-amber-100 text-sm">Aviso de Desafio Repetido</p>
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/30 text-amber-200 font-bold text-[10px]">
+                        {repeticaoIndividual.totalEnvios} {repeticaoIndividual.totalEnvios === 1 ? 'envio anterior' : 'envios anteriores'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-200/90 mt-1 leading-relaxed">
+                      {selectedAluno.nome.split(' ')[0]} já recebeu este mesmo desafio em <strong>{repeticaoIndividual.ultimoEnvio?.data_formatada || formatDataAmigavel(repeticaoIndividual.ultimoEnvio?.data_envio || '')}</strong>.
+                    </p>
+                    <p className="text-[11px] text-amber-300/80 mt-1">
+                      💡 <em>Dica:</em> Você pode reenviar caso o objetivo do aluno seja reforçar o hábito, ou selecionar outro micro-desafio inédito para manter a novidade.
                     </p>
                   </div>
                 </div>
@@ -284,21 +395,21 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
                   <button
                     type="button"
                     onClick={handleSelectAllEmRisco}
-                    className="text-[10px] px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all font-semibold"
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all font-semibold cursor-pointer"
                   >
                     Apenas Em Risco
                   </button>
                   <button
                     type="button"
                     onClick={handleSelectApenasIneditos}
-                    className="text-[10px] px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all font-semibold"
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all font-semibold cursor-pointer"
                   >
                     Apenas Inéditos
                   </button>
                   <button
                     type="button"
                     onClick={handleSelectAllAtivos}
-                    className="text-[10px] px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 transition-all font-semibold"
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 transition-all font-semibold cursor-pointer"
                   >
                     Todos ({alunos.length})
                   </button>
@@ -306,10 +417,11 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
               </div>
 
               {/* Lista Selecionável */}
-              <div className="max-h-44 overflow-y-auto rounded-2xl border border-emerald-500/20 bg-[#01140f] p-2 space-y-1 divide-y divide-white/5">
+              <div className="max-h-48 overflow-y-auto rounded-2xl border border-emerald-500/20 bg-[#01140f] p-2 space-y-1 divide-y divide-white/5">
                 {alunos.map((aluno) => {
                   const isChecked = selectedMassaIds.includes(aluno.id);
                   const isSentInSession = alunosEnviadosSet.has(aluno.id);
+                  const checkRepetido = verificarDesafioRepetido(historico, aluno.id, desafio.id, desafio.titulo);
 
                   return (
                     <div
@@ -325,10 +437,19 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
                           onChange={() => handleToggleMassaAluno(aluno.id)}
                           className="h-4 w-4 rounded border-emerald-500/40 text-emerald-500 focus:ring-0 bg-[#021813] cursor-pointer"
                         />
-                        <span className="font-semibold truncate">{aluno.nome}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {formatPhoneDisplay(aluno.telefone)}
-                        </span>
+                        <div className="min-w-0 truncate">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold truncate">{aluno.nome}</span>
+                            {checkRepetido.repetido && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold shrink-0">
+                                Repetido ({checkRepetido.totalEnvios}x)
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500 font-mono">
+                            {formatPhoneDisplay(aluno.telefone)}
+                          </p>
+                        </div>
                       </label>
 
                       {/* Botão de Envio 1-Clique Nativo para este aluno */}
@@ -336,7 +457,7 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDispararAlunoDaFila(aluno)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer shadow-sm ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer shadow-sm ${
                             isSentInSession
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                               : 'bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:brightness-110 active:scale-95'
@@ -363,7 +484,7 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
               <p className="text-[10px] text-slate-400 flex items-center gap-1">
                 <Sparkles className="h-3 w-3 text-cyan-400 shrink-0" />
                 <span>
-                  O navegador protege contra spam abrindo abas apenas com o seu clique direto. Use os botões <strong>Abrir wa.me</strong> acima para cada aluno da fila.
+                  O navegador abre o WhatsApp apenas no clique direto. Cada envio grava automaticamente o evento no Supabase.
                 </span>
               </p>
             </div>
@@ -423,12 +544,9 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
               <>
                 <button
                   type="button"
-                  onClick={() => {
-                    onDisparoConcluido([selectedAluno.id], desafio, customMessage, false);
-                    showToast('Desafio registrado no histórico!');
-                    setTimeout(() => onClose(), 1000);
-                  }}
-                  className="px-3.5 py-2.5 rounded-xl border border-emerald-500/30 bg-[#021813] text-xs font-bold text-emerald-300 hover:bg-[#03241c] hover:border-emerald-400 active:scale-95 transition-all cursor-pointer"
+                  onClick={handleApenasRegistrar}
+                  disabled={isSavingSupabase}
+                  className="px-3.5 py-2.5 rounded-xl border border-emerald-500/30 bg-[#021813] text-xs font-bold text-emerald-300 hover:bg-[#03241c] hover:border-emerald-400 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
                 >
                   Apenas Registrar
                 </button>
@@ -437,10 +555,19 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
                   type="button"
                   id="btn-disparar-whatsapp-individual-nativo"
                   onClick={handleDispararIndividualNativo}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                  disabled={isSavingSupabase}
+                  className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg active:scale-95 transition-all cursor-pointer ${
+                    repeticaoIndividual.repetido
+                      ? 'bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 shadow-amber-500/20 hover:brightness-110'
+                      : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 shadow-emerald-500/30 hover:brightness-110'
+                  }`}
                 >
                   <Send className="h-4 w-4" />
-                  <span>Abrir WhatsApp ({selectedAluno.nome.split(' ')[0]})</span>
+                  <span>
+                    {repeticaoIndividual.repetido
+                      ? `Reenviar via WhatsApp (${selectedAluno.nome.split(' ')[0]})`
+                      : `Abrir WhatsApp (${selectedAluno.nome.split(' ')[0]})`}
+                  </span>
                   <ExternalLink className="h-3.5 w-3.5" />
                 </button>
               </>
@@ -452,7 +579,7 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
                 className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Check className="h-4 w-4 stroke-[3]" />
-                <span>Finalizar & Salvar Histórico ({selectedMassaIds.length})</span>
+                <span>Salvar Histórico no Supabase ({selectedMassaIds.length})</span>
               </button>
             )}
           </div>

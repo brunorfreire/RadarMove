@@ -24,6 +24,7 @@ import {
   Profissional 
 } from './types';
 import { openWhatsApp } from './lib/whatsappUtils';
+import { listarHistoricoDesafiosPersonal } from './lib/historicoDesafiosService';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -256,7 +257,17 @@ export default function App() {
           setTemplates(defaultTemplates);
         }
 
-        // E. Gera alertas do Radar dinamicamente com base nos alunos reais
+        // E. Carrega o histórico de desafios do Personal a partir da tabela 'historico_desafios'
+        try {
+          const dbHistorico = await listarHistoricoDesafiosPersonal();
+          if (dbHistorico && dbHistorico.length > 0) {
+            setDesafiosEnviados(dbHistorico);
+          }
+        } catch (histErr) {
+          console.warn('[App] Não foi possível carregar historico_desafios:', histErr);
+        }
+
+        // F. Gera alertas do Radar dinamicamente com base nos alunos reais
         const novosAlertas: RadarAlerta[] = [];
         alunosList.forEach((aluno) => {
           if (aluno.status === 'em_risco' || aluno.dias_sem_treino >= 4) {
