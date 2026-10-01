@@ -21,6 +21,7 @@ import { CategoriasExplainer } from './CategoriasExplainer';
 import { DesafioCard } from './DesafioCard';
 import { DispararDesafioModal } from './DispararDesafioModal';
 import { NovoDesafioModal } from './NovoDesafioModal';
+import { SalvarTemplateModal } from './SalvarTemplateModal';
 import { AgendamentoModal } from './AgendamentoModal';
 import { DesafioTemplate, Aluno, WhatsAppMensagem, CategoriaDesafio, DesafioEnviado } from '../../types';
 
@@ -56,6 +57,7 @@ export const DesafiosView: React.FC<DesafiosViewProps> = ({
   const [activeDesafioToSchedule, setActiveDesafioToSchedule] = useState<DesafioTemplate | null>(null);
   const [alunoToSchedule, setAlunoToSchedule] = useState<Aluno | null>(null);
   const [isNovoModalOpen, setIsNovoModalOpen] = useState(false);
+  const [isCustomTemplateModalOpen, setIsCustomTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<DesafioTemplate | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -208,6 +210,17 @@ export const DesafiosView: React.FC<DesafiosViewProps> = ({
                 <span className="text-sm font-extrabold text-emerald-400">88.4% de resposta</span>
               </div>
             </div>
+
+            {/* Salvar Novo Template Button */}
+            <button
+              id="btn-salvar-novo-template"
+              onClick={() => setIsCustomTemplateModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-[#02281d] border border-emerald-400/40 px-3.5 py-2.5 text-xs font-extrabold text-emerald-300 shadow-md hover:bg-emerald-500/20 hover:border-emerald-300 hover:text-white active:scale-95 transition-all cursor-pointer"
+              title="Salvar novo template no Supabase com suporte a {aluno_nome} e {treinador_nome}"
+            >
+              <Sparkles className="h-4 w-4 text-emerald-400" />
+              <span>Salvar Novo Template</span>
+            </button>
 
             {/* Create New Challenge Button */}
             <button
@@ -448,6 +461,16 @@ export const DesafiosView: React.FC<DesafiosViewProps> = ({
         }}
         onSave={handleSaveTemplate}
         editingTemplate={editingTemplate}
+      />
+
+      {/* 4. Modal para Salvar Novo Template no Supabase (desafios_templates) */}
+      <SalvarTemplateModal
+        isOpen={isCustomTemplateModalOpen}
+        onClose={() => setIsCustomTemplateModalOpen(false)}
+        onTemplateSaved={(created) => {
+          setTemplates((prev) => [created, ...prev]);
+          showToast(`Template "${created.titulo}" salvo com sucesso no banco de dados!`);
+        }}
       />
     </div>
   );

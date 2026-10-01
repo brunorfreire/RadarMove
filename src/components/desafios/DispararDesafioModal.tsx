@@ -82,10 +82,12 @@ export const DispararDesafioModal: React.FC<DispararDesafioModalProps> = ({
     setSelectedMassaIds(ineditosIds);
   };
 
-  // Helper to replace {aluno} placeholder with the actual student first name
+  // Helper to replace dynamic placeholders with actual student & personal trainer names
   const getPreviewText = (templateText: string, alunoNome: string) => {
     const firstName = alunoNome ? alunoNome.split(' ')[0] : 'Aluno';
-    return templateText.replace(/\{aluno\}/g, firstName).replace(/\{personal\}/g, 'Personal');
+    return templateText
+      .replace(/\{aluno_nome\}|\{aluno\}/g, firstName)
+      .replace(/\{treinador_nome\}|\{personal\}/g, 'Personal');
   };
 
   const filteredAlunos = alunos.filter(a => 

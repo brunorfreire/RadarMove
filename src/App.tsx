@@ -600,8 +600,8 @@ export default function App() {
       const targetAluno = alunos.find(a => a.id === id);
       if (targetAluno) {
         const formattedText = customMessage
-          .replace(/\{aluno\}/g, targetAluno.nome.split(' ')[0])
-          .replace(/\{personal\}/g, profissional.nome_profissional.split(' ')[0]);
+          .replace(/\{aluno_nome\}|\{aluno\}/g, targetAluno.nome.split(' ')[0])
+          .replace(/\{treinador_nome\}|\{personal\}/g, profissional.nome_profissional.split(' ')[0]);
 
         novasMensagens.push({
           id: `wpp-${Date.now()}-${id}`,

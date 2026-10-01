@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   Send, 
@@ -12,11 +12,19 @@ import {
   Users,
   Search,
   ExternalLink,
-  UserCheck
+  UserCheck,
+  Loader2,
+  FileText
 } from 'lucide-react';
-import { formatPhoneDisplay, formatWhatsAppNumber, getWhatsAppUrl } from '../../lib/whatsappUtils';
-import { sendWhatsAppAction } from './actions';
+import { supabase } from '../../lib/supabaseClient';
+import { formatPhoneDisplay } from '../../lib/whatsappUtils';
 import { Aluno } from '../../types';
+
+interface TemplateItem {
+  id: string;
+  titulo: string;
+  mensagem: string;
+}
 
 interface MensagemAvulsaModalProps {
   isOpen: boolean;
@@ -39,6 +47,9 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
   const [searchContact, setSearchContact] = useState('');
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [dbTemplates, setDbTemplates] = useState<TemplateItem[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [toast, setToast] = useState<{
     type: 'success' | 'error';
     text: string;
@@ -63,45 +74,164 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
   // Define o telefone ativo conforme o modo selecionado
   const activePhone = recipientMode === 'contato' ? (selectedAluno?.telefone || '') : phone;
   const cleanDigits = activePhone.replace(/\D/g, '');
-  const formattedWhatsAppNumber = formatWhatsAppNumber(activePhone);
 
-  // Preset templates rápidos para agilizar o trabalho do personal
-  const quickTemplates = [
-    {
-      label: 'Desafio Rápido',
-      text: 'Olá! Passando para te lançar o desafio do dia no RadarMove: 10 minutos de caminhada pós-almoço e meta de 2L de água batida. Topa cumprir hoje?',
-    },
-    {
-      label: 'Convite Avaliação',
-      text: 'Olá! Gostaria de te convidar para agendarmos a sua próxima avaliação física e alinharmos as novas metas de treino. Que dia e horário ficam melhores para você?',
-    },
-    {
-      label: 'Check-in e Energia',
-      text: 'Olá! Passando para um check-in rápido de treino e recuperação. Como estão suas dores musculares, descanso e disposição hoje?',
-    },
-    {
-      label: 'Feedback Treino',
-      text: 'Parabéns pela dedicação no treino de hoje! Manteve uma constância excelente. Continue nesse ritmo!',
-    },
-  ];
+  // 1. Busca dinâmica dos templates cadastrados no Supabase (com proteção RLS)
+  useEffect(() => {
+    if (!isOpen) return;
 
-  // Aplica placeholders como {aluno} se selecionado contato
-  const applyTemplate = (tplText: string) => {
+    let isMounted = true;
+
+    async function carregarTemplates() {
+      setLoadingTemplates(true);
+      try {
+        // Tenta buscar da tabela 'templates' (com fallback para 'templates_mensagens' ou 'desafios_templates')
+        let templatesList: TemplateItem[] = [];
+
+        // Tentativa principal: tabela 'templates'
+        const { data: dataTemplates, error: errorTemplates } = await supabase
+          .from('templates')
+          .select('id, titulo, mensagem')
+          .order('titulo', { ascending: true });
+
+        if (!errorTemplates && dataTemplates && dataTemplates.length > 0) {
+          templatesList = dataTemplates.map((t: any) => ({
+            id: String(t.id),
+            titulo: t.titulo || 'Template sem título',
+            mensagem: t.mensagem || t.conteudo || '',
+          }));
+        } else {
+          // Fallback resiliente: tabela 'templates_mensagens'
+          const { data: dataAlt, error: errorAlt } = await supabase
+            .from('templates_mensagens')
+            .select('id, titulo, conteudo')
+            .order('titulo', { ascending: true });
+
+          if (!errorAlt && dataAlt && dataAlt.length > 0) {
+            templatesList = dataAlt.map((t: any) => ({
+              id: String(t.id),
+              titulo: t.titulo || 'Template sem título',
+              mensagem: t.conteudo || '',
+            }));
+          } else {
+            // Fallback secundário: tabela 'desafios_templates'
+            const { data: dataDesafios } = await supabase
+              .from('desafios_templates')
+              .select('id, titulo, mensagem_whatsapp')
+              .order('titulo', { ascending: true });
+
+            if (dataDesafios && dataDesafios.length > 0) {
+              templatesList = dataDesafios.map((t: any) => ({
+                id: String(t.id),
+                titulo: t.titulo || 'Template de desafio',
+                mensagem: t.mensagem_whatsapp || '',
+              }));
+            }
+          }
+        }
+
+        // Se ainda não houver nenhum template salvo no banco, fornece padrões rápidos de apoio
+        if (templatesList.length === 0) {
+          templatesList = [
+            {
+              id: 'tpl-default-1',
+              titulo: 'Check-in de Foco & Treino',
+              mensagem: 'Olá, {aluno_nome}! Passando para um check-in rápido de treino e recuperação. Como estão suas dores musculares, sono e disposição hoje?',
+            },
+            {
+              id: 'tpl-default-2',
+              titulo: 'Desafio Rápido de Hidratação',
+              mensagem: 'Fala, {aluno_nome}! Passando para te lançar o desafio do dia no RadarMove: meta de 3L de água batida e 10 min de caminhada. Topa cumprir hoje?',
+            },
+            {
+              id: 'tpl-default-3',
+              titulo: 'Agendamento de Avaliação',
+              mensagem: 'Olá, {aluno_nome}! Gostaria de te convidar para agendarmos a sua próxima avaliação física e alinharmos as novas metas de treino. Que dia e horário ficam melhores para você?',
+            },
+          ];
+        }
+
+        if (isMounted) {
+          setDbTemplates(templatesList);
+        }
+      } catch (err) {
+        console.warn('[MensagemAvulsaModal] Erro ao carregar templates do Supabase:', err);
+      } finally {
+        if (isMounted) {
+          setLoadingTemplates(false);
+        }
+      }
+    }
+
+    carregarTemplates();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  // 2. Preenchimento automático do textarea ao selecionar template
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (!templateId) return;
+
+    const tpl = dbTemplates.find((t) => t.id === templateId);
+    if (!tpl) return;
+
+    let textoFinal = tpl.mensagem;
+
+    // Substitui {aluno_nome} ou {aluno} se houver aluno selecionado
     if (selectedAluno) {
       const primeiroNome = selectedAluno.nome.split(' ')[0];
-      setMessage(tplText.replace(/Olá!/g, `Olá, ${primeiroNome}!`));
+      textoFinal = textoFinal
+        .replace(/\{aluno_nome\}|\{aluno\}/g, primeiroNome)
+        .replace(/\{treinador_nome\}|\{personal\}/g, 'Treinador');
     } else {
-      setMessage(tplText);
+      textoFinal = textoFinal
+        .replace(/\{aluno_nome\}|\{aluno\}/g, '')
+        .replace(/\{treinador_nome\}|\{personal\}/g, 'Treinador')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
     }
+
+    setMessage(textoFinal);
+    setToast(null);
   };
 
   const handleSelectAluno = (aluno: Aluno) => {
     setSelectedAlunoId(aluno.id);
     setToast(null);
+
+    // Se já tinha selecionado um template antes, atualiza a saudação com o nome do aluno
+    if (selectedTemplateId) {
+      const tpl = dbTemplates.find((t) => t.id === selectedTemplateId);
+      if (tpl) {
+        const primeiroNome = aluno.nome.split(' ')[0];
+        const textoAtualizado = tpl.mensagem
+          .replace(/\{aluno_nome\}|\{aluno\}/g, primeiroNome)
+          .replace(/\{treinador_nome\}|\{personal\}/g, 'Treinador');
+        setMessage(textoAtualizado);
+      }
+    }
   };
 
-  // Disparo nativo via link universal wa.me
-  const handleSend = async (e?: React.FormEvent | React.MouseEvent) => {
+  // 3. Higieniza o número com código do país (+55 Brasil)
+  const formatarNumeroComDDI = (numeroRaw: string): string => {
+    const digitos = numeroRaw.replace(/\D/g, '');
+    if (!digitos) return '';
+
+    // DDD + Número (10 ou 11 dígitos, ex: 11999998888 ou 2188887777)
+    if (digitos.length === 10 || digitos.length === 11) {
+      return `55${digitos}`;
+    }
+    // Já possui 55 no início (12 ou 13 dígitos)
+    if ((digitos.length === 12 || digitos.length === 13) && digitos.startsWith('55')) {
+      return digitos;
+    }
+    return digitos;
+  };
+
+  // 4. Lógica de Disparo 100% nativa via wa.me oficial
+  const handleSend = (e?: React.FormEvent | React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -124,42 +254,46 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
       return;
     }
 
-    try {
-      const result = await sendWhatsAppAction(activePhone, message.trim());
-
-      if (result.success) {
-        setToast({
-          type: 'success',
-          text: 'WhatsApp aberto com sucesso! Você pode enviar e continuar a conversa nativamente.',
-        });
-
-        if (onSuccess) {
-          onSuccess({
-            phone: activePhone,
-            message: message.trim(),
-            alunoNome: selectedAluno?.nome,
-          });
-        }
-
-        setTimeout(() => {
-          setPhone('');
-          setMessage('');
-          setSelectedAlunoId('');
-          setToast(null);
-          onClose();
-        }, 1200);
-      } else {
-        setToast({
-          type: 'error',
-          text: result.error || 'Não foi possível gerar o link do WhatsApp.',
-        });
-      }
-    } catch (error: any) {
+    const numeroFormatado = formatarNumeroComDDI(activePhone);
+    if (!numeroFormatado || numeroFormatado.length < 10) {
       setToast({
         type: 'error',
-        text: 'Erro ao abrir WhatsApp: ' + error.message,
+        text: 'Número de telefone inválido. Verifique o DDD e os dígitos.',
+      });
+      return;
+    }
+
+    // Codificação de texto segura para URL
+    const textoCodificado = encodeURIComponent(message.trim());
+    const waUrl = `https://wa.me/${numeroFormatado}?text=${textoCodificado}`;
+
+    // Abertura nativa no WhatsApp Web / WhatsApp Desktop / Celular
+    const win = window.open(waUrl, '_blank', 'noopener,noreferrer');
+    if (!win) {
+      window.location.href = waUrl;
+    }
+
+    setToast({
+      type: 'success',
+      text: 'Conversa no WhatsApp aberta com sucesso!',
+    });
+
+    if (onSuccess) {
+      onSuccess({
+        phone: numeroFormatado,
+        message: message.trim(),
+        alunoNome: selectedAluno?.nome,
       });
     }
+
+    setTimeout(() => {
+      setPhone('');
+      setMessage('');
+      setSelectedAlunoId('');
+      setSelectedTemplateId('');
+      setToast(null);
+      onClose();
+    }, 1200);
   };
 
   if (!isOpen) return null;
@@ -172,7 +306,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
     >
       <div
         id="modal-mensagem-avulsa"
-        className="w-full max-w-lg rounded-2xl border border-emerald-500/30 bg-[#032019] shadow-2xl backdrop-blur-2xl relative flex flex-col max-h-[92vh] overflow-hidden text-slate-100"
+        className="w-full max-w-lg rounded-3xl border border-emerald-500/30 bg-[#032019] shadow-2xl backdrop-blur-2xl relative flex flex-col max-h-[92vh] overflow-hidden text-slate-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Glow decoration */}
@@ -187,13 +321,13 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-white">Disparo WhatsApp</h3>
+                <h3 className="font-extrabold text-base text-white">Mensagem Avulsa</h3>
                 <span className="rounded bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-400/30">
-                  Link Nativo (wa.me)
+                  wa.me nativo
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Envio direto, seguro e sem limite de API externa
+                Dispare mensagens rápidas direto para o WhatsApp sem cadastrar o contato
               </p>
             </div>
           </div>
@@ -364,7 +498,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
                 <span className="text-xs text-slate-300 font-medium">Telefone com DDD</span>
                 {cleanDigits.length >= 10 && (
                   <span className="text-[11px] font-mono text-cyan-300">
-                    Formato: +{formattedWhatsAppNumber}
+                    Formato WhatsApp: +{formatarNumeroComDDI(cleanDigits)}
                   </span>
                 )}
               </div>
@@ -374,7 +508,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
                 type="text"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="Ex: 21999999999 ou (11) 98888-7777"
+                placeholder="Ex: (11) 98888-7777 ou 21999998888"
                 required
                 className="w-full rounded-xl border border-emerald-500/25 bg-[#02140f] px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 transition-all font-mono"
               />
@@ -388,24 +522,59 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
             </div>
           )}
 
-          {/* Templates Rápidos (Presets) */}
-          <div className="space-y-1.5 pt-1">
-            <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
-              <Sparkles className="h-3 w-3 text-cyan-400" />
-              Preenchimento Rápido com Modelos:
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {quickTemplates.map((tpl, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => applyTemplate(tpl.text)}
-                  className="rounded-lg border border-emerald-500/20 bg-[#021813] px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-cyan-300 hover:border-cyan-400/40 hover:bg-[#03261e] active:scale-95 transition-all cursor-pointer"
-                >
-                  {tpl.label}
-                </button>
-              ))}
+          {/* Modelos Dinâmicos do Supabase (Tabela 'templates') */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <label htmlFor="select-template-dinamico" className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                <span>Modelos Dinâmicos (Supabase)</span>
+              </label>
+
+              {loadingTemplates && (
+                <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
+                  <Loader2 className="h-3 w-3 animate-spin text-emerald-400" />
+                  Carregando...
+                </span>
+              )}
             </div>
+
+            {/* Select Estilizado de Templates */}
+            <div className="relative">
+              <select
+                id="select-template-dinamico"
+                value={selectedTemplateId}
+                onChange={(e) => handleSelectTemplate(e.target.value)}
+                className="w-full rounded-xl border border-emerald-500/30 bg-[#02140f] px-3.5 py-2.5 text-xs text-white focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 transition-all cursor-pointer"
+              >
+                <option value="">-- Selecione um modelo salvo para preencher --</option>
+                {dbTemplates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.titulo}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Chips Rápidos dos 3 primeiros templates */}
+            {dbTemplates.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {dbTemplates.slice(0, 4).map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => handleSelectTemplate(tpl.id)}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                      selectedTemplateId === tpl.id
+                        ? 'border-emerald-400/60 bg-emerald-500/25 text-emerald-200'
+                        : 'border-emerald-500/20 bg-[#021813] text-slate-300 hover:text-cyan-300 hover:border-cyan-400/40 hover:bg-[#03261e]'
+                    }`}
+                  >
+                    <FileText className="h-3 w-3 text-cyan-400 shrink-0" />
+                    <span className="truncate max-w-[140px]">{tpl.titulo}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Campo: Mensagem */}
@@ -427,7 +596,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
               rows={4}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Digite aqui o texto do desafio, convite ou aviso..."
+              placeholder="Digite aqui o texto da mensagem ou selecione um modelo acima..."
               required
               className="w-full rounded-xl border border-emerald-500/25 bg-[#02140f] p-3 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 transition-all resize-none leading-relaxed"
             />
@@ -452,7 +621,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
                 <div className="pt-1 flex items-center gap-1 text-[10px] text-slate-400 truncate font-mono">
                   <ExternalLink className="h-3 w-3 text-emerald-400 shrink-0" />
                   <span className="truncate">
-                    {getWhatsAppUrl(activePhone, message.trim())}
+                    https://wa.me/{formatarNumeroComDDI(activePhone)}?text={encodeURIComponent(message.trim()).slice(0, 40)}...
                   </span>
                 </div>
               )}
@@ -478,7 +647,7 @@ export const MensagemAvulsaModal: React.FC<MensagemAvulsaModalProps> = ({
               className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="h-4 w-4 fill-slate-950 text-slate-950" />
-              <span>Abrir no WhatsApp</span>
+              <span>Enviar WhatsApp</span>
               <ExternalLink className="h-3.5 w-3.5 text-slate-950" />
             </button>
           </div>
