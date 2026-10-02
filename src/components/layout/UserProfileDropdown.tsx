@@ -251,6 +251,23 @@ export function UserProfileDropdown({ collapsed = false }: UserProfileDropdownPr
                   PRO
                 </span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  window.location.hash = '';
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-zinc-200 rounded-lg hover:bg-emerald-500/15 hover:text-white transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>Ver Página de Vendas</span>
+                </div>
+                <span className="text-[9px] text-slate-400 bg-white/5 px-1.5 py-0.5 rounded">
+                  Site
+                </span>
+              </button>
             </div>
 
             <div className="border-t border-emerald-500/15 my-1" />

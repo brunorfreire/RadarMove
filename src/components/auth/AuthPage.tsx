@@ -369,10 +369,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
           </button>
         </form>
 
-        {/* Rodapé Seguro */}
-        <div className="mt-6 pt-4 border-t border-emerald-500/15 flex items-center justify-center gap-2 text-[11px] text-slate-400">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Autenticação protegida via Supabase Auth & RLS</span>
+        {/* Rodapé Seguro e Link para a Landing Page */}
+        <div className="mt-6 pt-4 border-t border-emerald-500/15 flex flex-col items-center gap-2 text-[11px] text-slate-400">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Autenticação protegida via Supabase Auth & RLS</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.hash = '#landing';
+            }}
+            className="text-emerald-400 hover:text-emerald-300 font-bold hover:underline transition-all cursor-pointer mt-1"
+          >
+            ← Conhecer o Ecossistema e Planos do RadarMove
+          </button>
         </div>
       </div>
     </div>

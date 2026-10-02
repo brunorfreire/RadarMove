@@ -25,6 +25,7 @@ import {
 } from './types';
 import { openWhatsApp } from './lib/whatsappUtils';
 import { listarHistoricoDesafiosPersonal } from './lib/historicoDesafiosService';
+import { LandingPage } from './pages/LandingPage';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -34,6 +35,8 @@ export default function App() {
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isMensagemAvulsaOpen, setIsMensagemAvulsaOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentHash, setCurrentHash] = useState<string>(() => window.location.hash || '');
+  const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname || '/');
   
   // Auth state
   const [session, setSession] = useState<any>(null);
@@ -76,12 +79,21 @@ export default function App() {
 
     initAuth();
 
+    const handleHashChange = () => {
+      setCurrentHash(window.location.hash || '');
+      setCurrentPath(window.location.pathname || '/');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       setAuthLoading(false);
     });
 
     return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
       subscription.unsubscribe();
     };
   }, []);
@@ -773,12 +785,57 @@ export default function App() {
     );
   }
 
-  // Se não estiver autenticado ou rota for #login, exibe a tela de login/cadastro
-  if (!session || window.location.hash === '#login') {
+  // ============================================================================
+  // ROTEAMENTO SAAS DO RADARMOVE:
+  // 1. Rota de Login (/login ou #login): tela de autenticação
+  // 2. Rota do App (#app ou autenticado com hash #app): Painel do Treinador
+  // 3. Rota Raiz (/ ou #landing ou #home): Landing Page oficial de vendas
+  // ============================================================================
+  const isLoginRoute = currentHash === '#login' || currentPath === '/login';
+  const isAppRoute = currentHash === '#app' || currentPath.startsWith('/app');
+
+  // CASO 1: Usuário acessou a tela de Login (/login ou #login)
+  if (isLoginRoute) {
+    if (session) {
+      // Se já estiver logado e tentar abrir /login, redireciona para o painel #app
+      window.location.hash = '#app';
+    } else {
+      return (
+        <AuthPage 
+          onAuthSuccess={() => {
+            window.location.hash = '#app';
+          }} 
+        />
+      );
+    }
+  }
+
+  // CASO 2: Usuário logado acessando o painel (#app)
+  if (session && isAppRoute) {
+    // Continua para renderizar o Dashboard completo abaixo
+  } else if (!isAppRoute) {
+    // CASO 3: Rota Raiz (/) ou qualquer visitante não direcionado explicitamente para o app
+    // Exibe exclusivamente a Landing Page oficial de vendas com o botão "Acessar Sistema"
+    return (
+      <LandingPage
+        onGoToLogin={() => {
+          window.location.hash = '#login';
+        }}
+        onEnterApp={() => {
+          if (session) {
+            window.location.hash = '#app';
+          } else {
+            window.location.hash = '#login';
+          }
+        }}
+      />
+    );
+  } else if (!session && isAppRoute) {
+    // Tentou acessar o painel #app sem estar logado -> envia para o login
     return (
       <AuthPage 
         onAuthSuccess={() => {
-          window.location.hash = '';
+          window.location.hash = '#app';
         }} 
       />
     );
