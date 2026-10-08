@@ -71,6 +71,27 @@ export interface FotoEvolucao {
   etiqueta?: string; // e.g. "Início", "30 dias", "60 dias", "90 dias", "Fase Atual"
 }
 
+export interface DesafioImagem {
+  id: string;
+  url: string;
+  ordem?: number;
+  legenda?: string;
+  quadro_numero?: number;
+  exercicio_nome?: string;
+  repeticoes_tempo?: string;
+  orientacoes_postura?: string;
+  adaptacao_mobilidade?: string;
+}
+
+export type StatusEntregaDesafio = 
+  | 'pendente' 
+  | 'processando' 
+  | 'aceito' 
+  | 'enviado' 
+  | 'entregue' 
+  | 'lido' 
+  | 'falhou';
+
 export interface DesafioTemplate {
   id: string;
   profissional_id: string | null;
@@ -79,6 +100,11 @@ export interface DesafioTemplate {
   mensagem_whatsapp: string;
   tempo_estimado: string;
   dificuldade: 'Fácil' | 'Médio' | 'Desafiador';
+  // Novas propriedades educativas e visuais
+  imagens?: DesafioImagem[];
+  imagem_url?: string;
+  orientacoes_execucao?: string[];
+  adaptacoes_seguranca?: string;
 }
 
 export interface RadarAlerta {
@@ -148,6 +174,14 @@ export interface DesafioEnviado {
   vezes_enviado?: number; // 1 = 1º envio, 2+ = repetido
   status_resposta?: 'concluido' | 'em_andamento' | 'pendente' | 'sem_resposta';
   origem_disparo?: 'individual' | 'massa' | 'radar_alerta' | 'card_rapido' | 'radar_dashboard';
+  // Rastreamento detalhado de provedor e imagens
+  status_envio?: StatusEntregaDesafio;
+  imagens_urls?: string[];
+  imagem_url?: string;
+  numero_destino?: string;
+  provider_message_id?: string;
+  erro_envio?: string;
+  idempotency_key?: string;
 }
 
 export type LeadOrigem = 'instagram' | 'indicacao' | 'whatsapp' | 'trafego_pago' | 'presencial_academia' | 'outro';

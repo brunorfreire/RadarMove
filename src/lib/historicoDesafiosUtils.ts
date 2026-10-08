@@ -3,6 +3,7 @@ import { DesafioEnviado, DesafioTemplate } from '../types';
 /**
  * Retorna se um desafio específico já foi enviado anteriormente para um determinado aluno,
  * quantas vezes já foi enviado e quando foi o último envio.
+ * Considera como enviado se houver registro com status aceito, enviado, entregue ou lido.
  */
 export function verificarDesafioRepetido(
   historico: DesafioEnviado[],
@@ -14,6 +15,7 @@ export function verificarDesafioRepetido(
   totalEnvios: number;
   ultimoEnvio?: DesafioEnviado;
   diasDesdeUltimoEnvio?: number;
+  dataEnvioFormatada?: string;
 } {
   if (!alunoId || !historico || historico.length === 0) {
     return { repetido: false, totalEnvios: 0 };
@@ -21,7 +23,11 @@ export function verificarDesafioRepetido(
 
   const envios = historico.filter((item) => {
     if (item.aluno_id !== alunoId) return false;
-    if (item.desafio_id === desafioId) return true;
+    
+    // Ignora envios explicitamente falhados antes da confirmação
+    if (item.status_envio === 'falhou') return false;
+
+    if (item.desafio_id && item.desafio_id === desafioId) return true;
     if (desafioTitulo && item.desafio_titulo?.trim().toLowerCase() === desafioTitulo.trim().toLowerCase()) {
       return true;
     }
@@ -41,11 +47,18 @@ export function verificarDesafioRepetido(
   const diffMs = Date.now() - new Date(ultimo.data_envio).getTime();
   const dias = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 
+  const d = new Date(ultimo.data_envio);
+  const dia = String(d.getDate()).padStart(2, '0');
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const ano = d.getFullYear();
+  const dataFormatadaDDMMAAAA = `${dia}/${mes}/${ano}`;
+
   return {
     repetido: true,
     totalEnvios: envios.length,
     ultimoEnvio: ultimo,
     diasDesdeUltimoEnvio: dias,
+    dataEnvioFormatada: dataFormatadaDDMMAAAA,
   };
 }
 

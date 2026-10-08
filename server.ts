@@ -71,15 +71,16 @@ let totalDisparosRealizados = 0;
 async function sendWhatsAppMessageDirect(
   phone: string,
   message: string,
-  alunoNome?: string
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  alunoNome?: string,
+  mediaUrl?: string
+): Promise<{ success: boolean; messageId?: string; error?: string; mediaSent?: boolean }> {
   // Limpeza e garantia de DDI 55
   let digits = phone.replace(/\D/g, '');
   if (digits.length === 10 || digits.length === 11) {
     digits = `55${digits}`;
   }
 
-  console.log(`[WhatsApp Server Worker] Disparando mensagem no piloto automático para +${digits} (${alunoNome || 'Aluno'})...`);
+  console.log(`[WhatsApp Server Worker] Disparando mensagem no piloto automático para +${digits} (${alunoNome || 'Aluno'}) ${mediaUrl ? 'com mídia' : ''}...`);
 
   // 1. Provedor: Evolution API (prioritário se configurado ou se variáveis de ambiente estiverem presentes)
   const evolutionApiUrl = gatewayConfig.apiUrl || process.env.WHATSAPP_API_URL;
@@ -88,17 +89,33 @@ async function sendWhatsAppMessageDirect(
 
   if (evolutionApiUrl) {
     try {
-      const url = `${evolutionApiUrl.replace(/\/$/, '')}/message/sendText/${evolutionInstance}`;
-      const response = await fetch(url, {
+      // Se houver mídia válida (http/https), tenta endpoint sendMedia da Evolution API
+      const hasHttpMedia = mediaUrl && (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://'));
+      const endpoint = hasHttpMedia 
+        ? `${evolutionApiUrl.replace(/\/$/, '')}/message/sendMedia/${evolutionInstance}`
+        : `${evolutionApiUrl.replace(/\/$/, '')}/message/sendText/${evolutionInstance}`;
+
+      const payload = hasHttpMedia 
+        ? {
+            number: digits,
+            mediaMessage: {
+              mediatype: 'image',
+              caption: message,
+              media: mediaUrl,
+            },
+          }
+        : {
+            number: digits,
+            text: message,
+          };
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(evolutionApiKey ? { apikey: evolutionApiKey } : {}),
         },
-        body: JSON.stringify({
-          number: digits,
-          text: message,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const responseText = await response.text();
@@ -106,16 +123,25 @@ async function sendWhatsAppMessageDirect(
       try {
         data = JSON.parse(responseText);
       } catch {
-        // Resposta em HTML (ex: 502 Bad Gateway) ou texto plano
+        // Resposta em texto
       }
 
       if (!response.ok) {
+        // Fallback para sendText se envio de mídia falhar
+        if (hasHttpMedia) {
+          console.warn('[WhatsApp Server Worker] Falha no sendMedia da Evolution API, tentando fallback para sendText...');
+          return await sendWhatsAppMessageDirect(phone, `${message}\n\n📸 [Imagem do Desafio]: ${mediaUrl}`, alunoNome);
+        }
         const errorDetail = data?.message || data?.error || `Falha na Evolution API (${response.status}): ${responseText.slice(0, 100)}`;
         throw new Error(errorDetail);
       }
 
       totalDisparosRealizados++;
-      return { success: true, messageId: data?.key?.id || data?.messageId || `evo-${Date.now()}` };
+      return { 
+        success: true, 
+        messageId: data?.key?.id || data?.messageId || `evo-${Date.now()}`,
+        mediaSent: Boolean(hasHttpMedia)
+      };
     } catch (err: any) {
       console.error('[WhatsApp Server Worker] Erro Evolution API:', err.message);
       return { success: false, error: err.message };
@@ -445,22 +471,24 @@ app.post('/api/whatsapp/send-message', async (req: Request, res: Response) => {
 
 // Disparar imediatamente pelo servidor (sem abrir web.whatsapp.com)
 app.post('/api/whatsapp/send', async (req: Request, res: Response) => {
-  const { phone, message, telefone, mensagem, number, text } = req.body;
+  const { phone, message, telefone, mensagem, number, text, mediaUrl, imageUrl, imagem_url } = req.body;
   const targetPhone = phone || telefone || number;
   const targetMessage = message || mensagem || text;
+  const targetMedia = mediaUrl || imageUrl || imagem_url;
 
   if (!targetPhone || !targetMessage) {
     return res.status(400).json({ error: 'Parâmetros "phone" / "number" e "message" / "text" são obrigatórios.' });
   }
 
   try {
-    const result = await sendWhatsAppMessageDirect(targetPhone, targetMessage);
+    const result = await sendWhatsAppMessageDirect(targetPhone, targetMessage, undefined, targetMedia);
 
     if (result.success) {
       res.status(200).json({
         success: true,
         message: 'Mensagem enviada com sucesso!',
         messageId: result.messageId,
+        mediaSent: result.mediaSent,
       });
     } else {
       res.status(500).json({

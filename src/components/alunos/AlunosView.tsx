@@ -452,7 +452,7 @@ export const AlunosView: React.FC<AlunosViewProps> = ({
                 }`}
               >
                 <History className="h-4 w-4" />
-                <span>Histórico de Desafios</span>
+                <span>Histórico de Desafios de Bolso</span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                   mainSectionTab === 'desafios'
                     ? 'bg-black/30 text-white'

@@ -18,10 +18,13 @@ import {
   Zap,
   ChevronRight
 } from 'lucide-react'
-import { Aluno, DesafioTemplate } from '../../types'
+import { Aluno, DesafioTemplate, DesafioEnviado, DesafioImagem } from '../../types'
 import { supabase } from '../../lib/supabaseClient'
 import { formatPhoneDisplay } from '../../lib/whatsappUtils'
 import { criarAgendamentoWhatsApp } from '../../lib/agendamentoWhatsAppService'
+import { verificarDesafioRepetido } from '../../lib/historicoDesafiosUtils'
+import { obterImagensDesafio } from '../../lib/pocketChallengesImagesService'
+import { DesafioImagemViewer } from './DesafioImagemViewer'
 
 interface AgendamentoModalProps {
   isOpen: boolean
@@ -29,6 +32,7 @@ interface AgendamentoModalProps {
   desafio: DesafioTemplate | null
   alunos: Aluno[]
   alunoPreSelecionado?: Aluno | null
+  historico?: DesafioEnviado[]
   onAgendamentoCriado?: (agendamento: any) => void
 }
 
@@ -38,12 +42,14 @@ export const AgendamentoModal: React.FC<AgendamentoModalProps> = ({
   desafio,
   alunos,
   alunoPreSelecionado,
+  historico = [],
   onAgendamentoCriado,
 }) => {
   const [selectedAlunoId, setSelectedAlunoId] = useState<string>(
     alunoPreSelecionado?.id || alunos[0]?.id || ''
   )
   const [mensagem, setMensagem] = useState<string>('')
+  const [imagensDemonstrativas, setImagensDemonstrativas] = useState<DesafioImagem[]>(desafio?.imagens || [])
   
   // Data e hora padrão: Amanhã às 08:00
   const getPadraoDataHora = () => {
@@ -85,8 +91,28 @@ export const AgendamentoModal: React.FC<AgendamentoModalProps> = ({
       if (alunoPreSelecionado) {
         setSelectedAlunoId(alunoPreSelecionado.id)
       }
+
+      const currentDesafio = desafio;
+      async function carregarImgs() {
+        if (currentDesafio.imagens && currentDesafio.imagens.length > 0) {
+          setImagensDemonstrativas(currentDesafio.imagens);
+        } else {
+          const imgs = await obterImagensDesafio(currentDesafio.id, currentDesafio.titulo);
+          if (imgs && imgs.length > 0) setImagensDemonstrativas(imgs);
+        }
+      }
+      carregarImgs();
     }
   }, [isOpen, desafio, alunoPreSelecionado])
+
+  // Checagem se desafio já foi enviado para este aluno
+  const repeticaoStatus = verificarDesafioRepetido(
+    historico,
+    selectedAluno?.id || '',
+    desafio?.id || '',
+    desafio?.titulo
+  );
+  const jaEnviado = repeticaoStatus.repetido;
 
   // Atualiza placeholders ao trocar de aluno
   const handleTrocaAluno = (novoAlunoId: string) => {
@@ -141,6 +167,10 @@ export const AgendamentoModal: React.FC<AgendamentoModalProps> = ({
     try {
       if (!selectedAluno) {
         throw new Error('Por favor, selecione um aluno para receber o desafio.')
+      }
+
+      if (jaEnviado) {
+        throw new Error(`Este desafio já foi enviado para ${selectedAluno.nome} em ${repeticaoStatus.dataEnvioFormatada}. Agendamentos duplicados são bloqueados.`)
       }
 
       if (!mensagem.trim()) {
