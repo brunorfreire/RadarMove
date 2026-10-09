@@ -10,7 +10,8 @@ import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+// Porta 3000 é estritamente necessária pois o Nginx interno faz proxy_pass para http://localhost:3000
+const PORT = 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
 app.use(express.json());
